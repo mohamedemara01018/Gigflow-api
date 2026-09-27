@@ -288,7 +288,7 @@ export const deleteJob = asyncWrapper(
             await notifyFreelancersOnJobDeletion(
                 job,
                 proposals,
-                req.currentUser?._id?.toString()
+                job.client._id
             );
 
             // 4. Delete all proposals related to this job
