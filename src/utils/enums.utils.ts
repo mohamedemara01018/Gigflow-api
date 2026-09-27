@@ -160,6 +160,8 @@ export enum NotificationType {
     PROPOSAL_RECEIVED = "proposal_received",
     PROPOSAL_ACCEPTED = "proposal_accepted",
     PROPOSAL_REJECTED = "proposal_rejected",
+    PROPOSAL_SHORTLISTED = 'proposal_shortlisted',
+    PROPOSAL_UPDATED = 'proposal_updated',
 
     INVITATION_RECEIVED = "invitation_received",
 

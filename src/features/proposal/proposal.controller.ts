@@ -2,9 +2,14 @@ import { Request, Response, NextFunction } from "express";
 import { StatusCodes } from "http-status-codes";
 import { appError } from "../../utils/appError.utils.js";
 import asyncWrapper from "../../utils/asyncWrapper.utils.js";
-import { JobStatus, ProposalStatus, statusText } from "../../utils/enums.utils.js";
+import { AttachmentEntityType, JobStatus, ProposalStatus, statusText } from "../../utils/enums.utils.js";
 import { Job } from "../job/job.model.js";
 import { Proposal } from "./proposal.model.js";
+import { deleteAttachmentsByEntity } from "../../utils/functions.js";
+import {
+    notifyClientOnProposalCreated,
+    notifyFreelancerOnStatusUpdate,
+} from "./proposal.notification.js";
 
 // ==========================================
 // 1. GET PROPOSALS (Supports filtering by Job or Freelancer)
@@ -162,8 +167,11 @@ export const createProposal = asyncWrapper(
 
         await newProposal.populate([
             { path: "freelancer", select: "firstName lastName email" },
-            { path: "job", select: "title budget" },
+            { path: "job", select: "title budget client" },
         ]);
+
+        // DISPATCH NOTIFICATION TO CLIENT
+        await notifyClientOnProposalCreated(newProposal);
 
         res.status(StatusCodes.CREATED).json({
             status: statusText.SUCCESS,
@@ -267,7 +275,9 @@ export const updateProposalStatus = asyncWrapper(
             id,
             { $set: updateData },
             { new: true, runValidators: true }
-        ).populate("freelancer", "firstName lastName avatar email");
+        )
+            .populate("freelancer", "firstName lastName avatar email")
+            .populate("job", "title client");
 
         if (!updatedProposal) {
             return next(
@@ -278,6 +288,9 @@ export const updateProposalStatus = asyncWrapper(
                 })
             );
         }
+
+        // DISPATCH NOTIFICATION TO FREELANCER
+        await notifyFreelancerOnStatusUpdate(updatedProposal, (req as any).user?._id);
 
         res.status(StatusCodes.OK).json({
             status: statusText.SUCCESS,
@@ -311,9 +324,15 @@ export const deleteProposal = asyncWrapper(
         // Decrement proposals counter on Job schema
         await Job.findByIdAndUpdate(proposal.job, { $inc: { proposalsCount: -1 } });
 
+        // Clean up external storage & database records for attachments linked to this job
+        await deleteAttachmentsByEntity(
+            AttachmentEntityType.PROPOSAL,
+            id as string
+        );
+
         res.status(StatusCodes.OK).json({
             status: statusText.SUCCESS,
-            message: "Proposal withdrawn/deleted successfully",
+            message: "Proposal and associated attachments withdrawn/deleted successfully",
             data: null,
         });
     }

@@ -2,9 +2,15 @@ import { Request, Response, NextFunction } from "express";
 import { StatusCodes } from "http-status-codes";
 import { appError } from "../../utils/appError.utils.js";
 import asyncWrapper from "../../utils/asyncWrapper.utils.js";
-import { AttachmentEntityType, JobStatus, statusText } from "../../utils/enums.utils.js";
+import {
+    AttachmentEntityType,
+    JobStatus,
+    statusText,
+} from "../../utils/enums.utils.js";
 import { Job } from "./job.model.js";
 import { deleteAttachmentsByEntity } from "../../utils/functions.js";
+import { Proposal } from "../proposal/proposal.model.js";
+import { notifyFreelancersOnJobDeletion } from "./job.notification.js";
 
 // ==========================================
 // 1. GET ALL JOBS (With Search, Filtering & Pagination)
@@ -92,7 +98,7 @@ export const getJobById = asyncWrapper(
 
         const job = await Job.findById(id)
             .populate("client", "firstName lastName avatar email")
-            .populate("category", "name")
+            .populate("category", "name");
 
         if (!job) {
             return next(
@@ -233,7 +239,6 @@ export const editJob = asyncWrapper(
     }
 );
 
-
 // ==========================================
 // 5. DELETE JOB POSTING
 // ==========================================
@@ -251,9 +256,9 @@ export const deleteJob = asyncWrapper(
             );
         }
 
-        const deletedJob = await Job.findByIdAndDelete(id);
+        const job = await Job.findById(id);
 
-        if (!deletedJob) {
+        if (!job) {
             return next(
                 appError({
                     statusCode: StatusCodes.NOT_FOUND,
@@ -263,15 +268,45 @@ export const deleteJob = asyncWrapper(
             );
         }
 
-        // Clean up external storage & database records for attachments linked to this job
+        // 1. Fetch proposals with freelancer IDs
+        const proposals = await Proposal.find({ job: id }).select("_id freelancer");
+
+        if (proposals.length > 0) {
+            // 2. Cascade cleanup attachments for each proposal
+            await Promise.all(
+                proposals.map((proposal) =>
+                    deleteAttachmentsByEntity(
+                        AttachmentEntityType.PROPOSAL,
+                        proposal._id.toString()
+                    )
+                )
+            );
+
+            // 3. Delegate notification dispatching to job.notification module
+            console.log('currentUser', req.currentUser)
+
+            await notifyFreelancersOnJobDeletion(
+                job,
+                proposals,
+                req.currentUser?._id?.toString()
+            );
+
+            // 4. Delete all proposals related to this job
+            await Proposal.deleteMany({ job: id });
+        }
+
+        // 5. Clean up attachments linked directly to the job
         await deleteAttachmentsByEntity(
             AttachmentEntityType.JOB,
             id as string
         );
 
+        // 6. Delete the job document
+        await Job.findByIdAndDelete(id);
+
         res.status(StatusCodes.OK).json({
             status: statusText.SUCCESS,
-            message: "Job posting and associated attachments deleted successfully",
+            message: "Job posting, associated proposals, and related attachments deleted successfully",
             data: null,
         });
     }
