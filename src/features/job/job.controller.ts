@@ -283,7 +283,6 @@ export const deleteJob = asyncWrapper(
             );
 
             // 3. Delegate notification dispatching to job.notification module
-            console.log('currentUser', req.currentUser)
 
             await notifyFreelancersOnJobDeletion(
                 job,

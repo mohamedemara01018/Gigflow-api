@@ -206,3 +206,24 @@ export enum NotificationEntityType {
     WITHDRAWAL = "withdrawal",
     SYSTEM = "system",
 }
+
+
+export enum ConversationStatus {
+    ACTIVE = "active",
+    ARCHIVED = "archived",
+    BLOCKED = "blocked",
+}
+
+export enum MessageType {
+    TEXT = "text",
+    IMAGE = "image",
+    FILE = "file",
+    SYSTEM = "system",
+}
+
+export enum MessageStatus {
+    SENT = "sent",
+    DELIVERED = "delivered",
+    READ = "read",
+    FAILED = "failed",
+}

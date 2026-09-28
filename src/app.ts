@@ -29,6 +29,9 @@ import verificationRoutes from './features/verification-request/verificationRequ
 import countryRoutes from './features/country/country.route';
 import cityRoutes from './features/city/city.route'
 import notificationRoutes from './features/notification/notification.routes'
+import clientStatsRoutes from './features/clientStats/clientStats.route';
+import conversationRoutes from './features/conversation/conversation.routes'
+import messageRoutes from './features/message/message.routes'
 
 const app: Application = express();
 
@@ -110,6 +113,9 @@ app.use('/api/verifiction', verificationRoutes)
 app.use('/api/country', countryRoutes)
 app.use('/api/city', cityRoutes)
 app.use('/api/notification', notificationRoutes)
+app.use('/api/client-stats', clientStatsRoutes)
+app.use('/api/conversation', conversationRoutes)
+app.use('/api/message', messageRoutes)
 
 /* ===========================
     404 Handler
