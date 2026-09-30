@@ -27,14 +27,40 @@ export const createOrGetConversation = asyncWrapper(
         const freelancerObjId = new Types.ObjectId(String(freelancer));
         const jobObjId = job ? new Types.ObjectId(String(job)) : null;
 
-        let conversation = await Conversation.findOne({
-            $or: [
-                { client: clientObjId, freelancer: freelancerObjId },
-                { client: freelancerObjId, freelancer: clientObjId },
-            ],
-            job: jobObjId,
-        });
+        // 1. Try finding conversation between these two users matching this job
+        let conversation: any = null;
 
+        if (jobObjId) {
+            conversation = await Conversation.findOne({
+                $or: [
+                    { client: clientObjId, freelancer: freelancerObjId },
+                    { client: freelancerObjId, freelancer: clientObjId },
+                ],
+                job: jobObjId,
+            });
+        }
+
+        // 2. If not found by job, check if any conversation exists between these two users
+        if (!conversation) {
+            const fallbackConv = await Conversation.findOne({
+                $or: [
+                    { client: clientObjId, freelancer: freelancerObjId },
+                    { client: freelancerObjId, freelancer: clientObjId },
+                ],
+            });
+
+            if (fallbackConv) {
+                // If existing conversation has no job and we now have a job, attach it
+                if (!fallbackConv.job && jobObjId) {
+                    fallbackConv.job = jobObjId;
+                    if (contract) fallbackConv.contract = new Types.ObjectId(String(contract));
+                    await fallbackConv.save();
+                }
+                conversation = fallbackConv;
+            }
+        }
+
+        // 3. If still no conversation between these two users, create a new one
         if (!conversation) {
             try {
                 conversation = await Conversation.create({
@@ -49,7 +75,6 @@ export const createOrGetConversation = asyncWrapper(
                         { client: clientObjId, freelancer: freelancerObjId },
                         { client: freelancerObjId, freelancer: clientObjId },
                     ],
-                    job: jobObjId,
                 });
             }
         }
@@ -72,13 +97,13 @@ export const createOrGetConversation = asyncWrapper(
 );
 
 // ==========================================
-// 2. GET USER CONVERSATIONS (With Pagination)
+// 2. GET USER CONVERSATIONS (With Pagination & Server-Side Deduplication)
 // ==========================================
 export const getUserConversations = asyncWrapper(
     async (req: Request, res: Response, next: NextFunction) => {
         const { userId } = req.params;
         const page = parseInt(req.query.page as string) || 1;
-        const limit = parseInt(req.query.limit as string) || 10;
+        const limit = parseInt(req.query.limit as string) || 20;
 
         const userObjectId = new Types.ObjectId(String(userId));
 
@@ -89,17 +114,35 @@ export const getUserConversations = asyncWrapper(
 
         const skip = (page - 1) * limit;
 
-        const [conversations, totalItems] = await Promise.all([
+        const [rawConversations, totalItems] = await Promise.all([
             Conversation.find(filter)
-                .sort({ lastMessageAt: -1 })
+                .sort({ lastMessageAt: -1, updatedAt: -1 })
                 .skip(skip)
                 .limit(limit)
                 .populate("client", "firstName lastName avatar email")
                 .populate("freelancer", "firstName lastName avatar email")
                 .populate("job", "title budget status hourlyRateFrom hourlyRateTo")
+                .populate("contract")
                 .populate("lastMessage"),
             Conversation.countDocuments(filter),
         ]);
+
+        // Deduplicate conversations for the same client-freelancer-job tuple
+        const conversations: any[] = [];
+        const seenPairs = new Set<string>();
+
+        for (const conv of rawConversations) {
+            const clientUid = conv.client?._id?.toString() || conv.client?.toString() || "";
+            const freelancerUid = conv.freelancer?._id?.toString() || conv.freelancer?.toString() || "";
+            const jobUid = conv.job?._id?.toString() || conv.job?.toString() || "";
+
+            const pairKey = [clientUid, freelancerUid].sort().join("-") + `-${jobUid}`;
+
+            if (!seenPairs.has(pairKey)) {
+                seenPairs.add(pairKey);
+                conversations.push(conv);
+            }
+        }
 
         const totalPages = Math.ceil(totalItems / limit) || 1;
 
