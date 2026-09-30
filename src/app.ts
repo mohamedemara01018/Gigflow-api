@@ -32,6 +32,9 @@ import notificationRoutes from './features/notification/notification.routes'
 import clientStatsRoutes from './features/clientStats/clientStats.route';
 import conversationRoutes from './features/conversation/conversation.routes'
 import messageRoutes from './features/message/message.routes'
+import contractRoutes from './features/contract/contract.routes';
+import milestoneRoutes from './features/milestone/milestone.routes'
+
 
 const app: Application = express();
 
@@ -115,7 +118,9 @@ app.use('/api/city', cityRoutes)
 app.use('/api/notification', notificationRoutes)
 app.use('/api/client-stats', clientStatsRoutes)
 app.use('/api/conversation', conversationRoutes)
-app.use('/api/message', messageRoutes)
+app.use('/api/message', messageRoutes);
+app.use('/api/contract', contractRoutes);
+app.use('/api/milestone', milestoneRoutes);
 
 /* ===========================
     404 Handler

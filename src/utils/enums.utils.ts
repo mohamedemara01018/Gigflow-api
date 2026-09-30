@@ -227,3 +227,28 @@ export enum MessageStatus {
     READ = "read",
     FAILED = "failed",
 }
+
+export enum ContractType {
+    FIXED = "fixed",
+    HOURLY = "hourly",
+}
+
+export enum ContractStatus {
+    DRAFT = "draft",
+    ACTIVE = "active",
+    PAUSED = "paused",
+    COMPLETED = "completed",
+    CANCELLED = "cancelled",
+    REJECTED = "rejected",
+    DISPUTED = "disputed",
+}
+
+
+export enum MilestoneStatus {
+    PENDING = "pending",
+    IN_PROGRESS = "in_progress",
+    SUBMITTED = "submitted",
+    APPROVED = "approved",
+    REJECTED = "rejected",
+    CANCELLED = "cancelled",
+}

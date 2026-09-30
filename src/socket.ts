@@ -1,6 +1,6 @@
 // server/src/socket.ts
 import { Server as HttpServer } from "http";
-import { Server } from "socket.io";
+import { Server, Socket } from "socket.io";
 
 let io: Server;
 
@@ -12,7 +12,7 @@ export const initializeSocket = (server: HttpServer) => {
         },
     });
 
-    io.on("connection", (socket) => {
+    io.on("connection", (socket: Socket) => {
         console.log("Socket connected:", socket.id);
 
         // User joins their personal room
@@ -35,6 +35,24 @@ export const initializeSocket = (server: HttpServer) => {
             socket.leave(room);
             console.log(`Socket ${socket.id} left conversation room ${room}`);
         });
+
+        // Typing status: start
+        socket.on(
+            "typing_start",
+            ({ conversationId, userId }: { conversationId: string; userId: string }) => {
+                const room = `conversation:${conversationId}`;
+                socket.to(room).emit("user_typing", { conversationId, userId, isTyping: true });
+            }
+        );
+
+        // Typing status: stop
+        socket.on(
+            "typing_stop",
+            ({ conversationId, userId }: { conversationId: string; userId: string }) => {
+                const room = `conversation:${conversationId}`;
+                socket.to(room).emit("user_typing", { conversationId, userId, isTyping: false });
+            }
+        );
 
         socket.on("disconnect", () => {
             console.log("Socket disconnected:", socket.id);
