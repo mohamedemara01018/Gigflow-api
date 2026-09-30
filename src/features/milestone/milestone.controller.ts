@@ -7,7 +7,12 @@ import { Milestone } from "./milestone.model.js";
 import { Contract } from "../contract/contract.model.js";
 import { Conversation } from "../conversation/conversation.model.js";
 import { getIO } from "../../socket.js";
-import { notifyFreelancerOnMilestoneCreated } from "../contract/contract.notification.js";
+import {
+    notifyFreelancerOnMilestoneCreated,
+    notifyClientOnMilestoneSubmitted,
+    notifyFreelancerOnMilestoneApproved,
+    notifyFreelancerOnMilestoneRejected,
+} from "../contract/contract.notification.js";
 
 // ==========================================
 // 1. GET ALL MILESTONES FOR A CONTRACT
@@ -201,6 +206,7 @@ export const submitMilestone = asyncWrapper(
     async (req: Request, res: Response, next: NextFunction) => {
         const { id } = req.params;
         const currentUserId = req.currentUser?._id;
+        const { submissionNotes, submissionUrl } = req.body;
 
         const milestone = await Milestone.findById(id).populate("contract");
 
@@ -237,6 +243,8 @@ export const submitMilestone = asyncWrapper(
 
         milestone.status = MilestoneStatus.SUBMITTED;
         milestone.submittedAt = new Date();
+        milestone.submissionNotes = submissionNotes && submissionNotes.trim() ? submissionNotes.trim() : null;
+        milestone.submissionUrl = submissionUrl && submissionUrl.trim() ? submissionUrl.trim() : null;
         await milestone.save();
 
         try {
@@ -247,6 +255,9 @@ export const submitMilestone = asyncWrapper(
         } catch (socketError) {
             console.error("Socket emission failed:", socketError);
         }
+
+        // Notify client
+        await notifyClientOnMilestoneSubmitted(milestone, contract);
 
         res.status(StatusCodes.OK).json({
             status: statusText.SUCCESS,
@@ -342,6 +353,9 @@ export const approveMilestone = asyncWrapper(
             console.error("Socket emission failed:", socketError);
         }
 
+        // Notify freelancer
+        await notifyFreelancerOnMilestoneApproved(milestone, contract);
+
         res.status(StatusCodes.OK).json({
             status: statusText.SUCCESS,
             message: "Milestone approved successfully",
@@ -366,7 +380,7 @@ export const rejectMilestone = asyncWrapper(
             return next(
                 appError({
                     statusCode: StatusCodes.BAD_REQUEST,
-                    message: "A rejectionReason is required when rejecting a milestone",
+                    message: "A rejectionReason is required when requesting revisions on a milestone",
                     statusText: statusText.FAIL,
                 })
             );
@@ -419,9 +433,12 @@ export const rejectMilestone = asyncWrapper(
             console.error("Socket emission failed:", socketError);
         }
 
+        // Notify freelancer
+        await notifyFreelancerOnMilestoneRejected(milestone, contract);
+
         res.status(StatusCodes.OK).json({
             status: statusText.SUCCESS,
-            message: "Milestone rejected with revision details",
+            message: "Milestone revision requested with feedback",
             data: {
                 milestone,
             },

@@ -23,19 +23,44 @@ export const createOrGetConversation = asyncWrapper(
             );
         }
 
-        const query: Record<string, any> = {
-            client: new Types.ObjectId(client),
-            freelancer: new Types.ObjectId(freelancer),
-            job: job ? new Types.ObjectId(job) : null,
-        };
+        const clientObjId = new Types.ObjectId(String(client));
+        const freelancerObjId = new Types.ObjectId(String(freelancer));
+        const jobObjId = job ? new Types.ObjectId(String(job)) : null;
 
-        let conversation = await Conversation.findOne(query);
+        let conversation = await Conversation.findOne({
+            $or: [
+                { client: clientObjId, freelancer: freelancerObjId },
+                { client: freelancerObjId, freelancer: clientObjId },
+            ],
+            job: jobObjId,
+        });
 
         if (!conversation) {
-            conversation = await Conversation.create({
-                ...query,
-                contract: contract ? new Types.ObjectId(contract) : null,
-            });
+            try {
+                conversation = await Conversation.create({
+                    client: clientObjId,
+                    freelancer: freelancerObjId,
+                    job: jobObjId,
+                    contract: contract ? new Types.ObjectId(String(contract)) : null,
+                });
+            } catch (err: any) {
+                conversation = await Conversation.findOne({
+                    $or: [
+                        { client: clientObjId, freelancer: freelancerObjId },
+                        { client: freelancerObjId, freelancer: clientObjId },
+                    ],
+                    job: jobObjId,
+                });
+            }
+        }
+
+        if (conversation) {
+            conversation = await Conversation.findById(conversation._id)
+                .populate("client", "firstName lastName avatar email")
+                .populate("freelancer", "firstName lastName avatar email")
+                .populate("job", "title budget status hourlyRateFrom hourlyRateTo")
+                .populate("contract")
+                .populate("lastMessage");
         }
 
         res.status(StatusCodes.OK).json({

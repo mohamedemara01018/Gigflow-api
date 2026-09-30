@@ -195,3 +195,146 @@ export const notifyFreelancerOnMilestoneCreated = async (milestone: any, contrac
         console.error("Error sending milestone creation notification:", error);
     }
 };
+
+/**
+ * Dispatches a notification to the Client when a Freelancer submits work for a milestone.
+ */
+export const notifyClientOnMilestoneSubmitted = async (milestone: any, contract: any) => {
+    try {
+        const clientId =
+            typeof contract.client === "object"
+                ? contract.client._id
+                : contract.client;
+
+        const freelancerId =
+            typeof contract.freelancer === "object"
+                ? contract.freelancer._id
+                : contract.freelancer;
+
+        const freelancerName =
+            contract.freelancer && typeof contract.freelancer === "object" && contract.freelancer.firstName
+                ? `${contract.freelancer.firstName} ${contract.freelancer.lastName || ""}`.trim()
+                : "The freelancer";
+
+        const jobId =
+            typeof contract.job === "object" ? contract.job._id : contract.job;
+
+        if (!clientId) return;
+
+        const notificationTitle = "Milestone Work Submitted";
+        const notificationMessage = `${freelancerName} has submitted deliverables for Milestone #${milestone.order} "${milestone.title}" ($${Number(
+            milestone.amount
+        ).toLocaleString()}) for your review.`;
+
+        const notification = await Notification.create({
+            recipient: clientId,
+            sender: freelancerId || null,
+            type: NotificationType.MILESTONE_SUBMITTED,
+            title: notificationTitle,
+            message: notificationMessage,
+            entityType: NotificationEntityType.MILESTONE,
+            entityId: milestone._id,
+            link: `/messages?recipient=${freelancerId}&job=${jobId}`,
+        });
+
+        getIO().to(`user:${clientId}`).emit(NotificationType.MILESTONE_SUBMITTED, notification);
+    } catch (error) {
+        console.error("Error sending milestone submitted notification:", error);
+    }
+};
+
+/**
+ * Dispatches a notification to the Freelancer when a Client approves a milestone.
+ */
+export const notifyFreelancerOnMilestoneApproved = async (milestone: any, contract: any) => {
+    try {
+        const freelancerId =
+            typeof contract.freelancer === "object"
+                ? contract.freelancer._id
+                : contract.freelancer;
+
+        const clientId =
+            typeof contract.client === "object"
+                ? contract.client._id
+                : contract.client;
+
+        const clientName =
+            contract.client && typeof contract.client === "object" && contract.client.firstName
+                ? `${contract.client.firstName} ${contract.client.lastName || ""}`.trim()
+                : "The client";
+
+        const jobId =
+            typeof contract.job === "object" ? contract.job._id : contract.job;
+
+        if (!freelancerId) return;
+
+        const notificationTitle = "Milestone Approved!";
+        const notificationMessage = `${clientName} has approved Milestone #${milestone.order} "${milestone.title}" and released payment ($${Number(
+            milestone.amount
+        ).toLocaleString()}).`;
+
+        const notification = await Notification.create({
+            recipient: freelancerId,
+            sender: clientId || null,
+            type: NotificationType.MILESTONE_APPROVED,
+            title: notificationTitle,
+            message: notificationMessage,
+            entityType: NotificationEntityType.MILESTONE,
+            entityId: milestone._id,
+            link: `/messages?recipient=${clientId}&job=${jobId}`,
+        });
+
+        getIO().to(`user:${freelancerId}`).emit(NotificationType.MILESTONE_APPROVED, notification);
+    } catch (error) {
+        console.error("Error sending milestone approved notification:", error);
+    }
+};
+
+/**
+ * Dispatches a notification to the Freelancer when a Client requests revisions on a milestone.
+ */
+export const notifyFreelancerOnMilestoneRejected = async (milestone: any, contract: any) => {
+    try {
+        const freelancerId =
+            typeof contract.freelancer === "object"
+                ? contract.freelancer._id
+                : contract.freelancer;
+
+        const clientId =
+            typeof contract.client === "object"
+                ? contract.client._id
+                : contract.client;
+
+        const clientName =
+            contract.client && typeof contract.client === "object" && contract.client.firstName
+                ? `${contract.client.firstName} ${contract.client.lastName || ""}`.trim()
+                : "The client";
+
+        const jobId =
+            typeof contract.job === "object" ? contract.job._id : contract.job;
+
+        if (!freelancerId) return;
+
+        const notificationTitle = "Revision Requested on Milestone";
+        const reasonText = milestone.rejectionReason
+            ? ` Feedback: "${milestone.rejectionReason}"`
+            : "";
+        const notificationMessage = `${clientName} has requested revisions on Milestone #${milestone.order} "${milestone.title}".${reasonText}`;
+
+        const notification = await Notification.create({
+            recipient: freelancerId,
+            sender: clientId || null,
+            type: NotificationType.MILESTONE_REJECTED,
+            title: notificationTitle,
+            message: notificationMessage,
+            entityType: NotificationEntityType.MILESTONE,
+            entityId: milestone._id,
+            link: `/messages?recipient=${clientId}&job=${jobId}`,
+        });
+
+        getIO().to(`user:${freelancerId}`).emit(NotificationType.MILESTONE_REJECTED, notification);
+    } catch (error) {
+        console.error("Error sending milestone rejected notification:", error);
+    }
+};
+

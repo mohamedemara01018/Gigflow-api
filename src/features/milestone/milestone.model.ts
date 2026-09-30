@@ -55,6 +55,20 @@ const milestoneSchema = new Schema(
             default: null,
         },
 
+        submissionNotes: {
+            type: String,
+            trim: true,
+            maxlength: 5000,
+            default: null,
+        },
+
+        submissionUrl: {
+            type: String,
+            trim: true,
+            maxlength: 2000,
+            default: null,
+        },
+
         approvedAt: {
             type: Date,
             default: null,
