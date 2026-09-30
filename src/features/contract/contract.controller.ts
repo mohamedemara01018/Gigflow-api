@@ -2,9 +2,17 @@ import { Request, Response, NextFunction } from "express";
 import { StatusCodes } from "http-status-codes";
 import { appError } from "../../utils/appError.utils.js";
 import asyncWrapper from "../../utils/asyncWrapper.utils.js";
-import { ContractStatus, statusText } from "../../utils/enums.utils.js";
+import { ContractStatus, ContractType, MilestoneStatus, ProposalStatus, statusText, UserRole } from "../../utils/enums.utils.js";
 import { Contract } from "./contract.model.js";
+import { Proposal } from "../proposal/proposal.model.js";
 import { Conversation } from "../conversation/conversation.model.js";
+import { Milestone } from "../milestone/milestone.model.js";
+import { getIO } from "../../socket.js";
+import {
+    notifyFreelancerOnContractOffer,
+    notifyClientOnContractAccepted,
+    notifyClientOnContractRejected,
+} from "./contract.notification.js";
 
 // ==========================================
 // 1. GET ALL CONTRACTS (With Filters & Pagination)
@@ -94,45 +102,82 @@ export const getContractById = asyncWrapper(
 );
 
 // ==========================================
-// 3. CREATE CONTRACT
+// 3. CREATE CONTRACT (Draft Contract from Accepted Proposal)
 // ==========================================
 export const createContract = asyncWrapper(
     async (req: Request, res: Response, next: NextFunction) => {
-        const {
-            job,
-            proposal,
-            client,
-            freelancer,
-            type,
-            title,
-            description,
-            totalAmount,
-            startDate,
-            endDate,
-            status,
-        } = req.body;
+        const currentUserId = req.currentUser?._id;
+        const currentUserRole = req.currentUser?.role;
 
-        // 1. Validation
-        if (
-            !job ||
-            !proposal ||
-            !client ||
-            !freelancer ||
-            !type ||
-            !title ||
-            totalAmount === undefined
-        ) {
+        // 1. Authenticate and verify role is Client
+        if (!currentUserId || currentUserRole !== UserRole.CLIENT) {
             return next(
                 appError({
-                    statusCode: StatusCodes.BAD_REQUEST,
-                    message: "job, proposal, client, freelancer, type, title, and totalAmount are required fields",
+                    statusCode: StatusCodes.FORBIDDEN,
+                    message: "Only a client can create a contract",
                     statusText: statusText.FAIL,
                 })
             );
         }
 
-        // 2. Check for existing contract on the same proposal
-        const existingContract = await Contract.findOne({ proposal });
+        const {
+            proposal: proposalParam,
+            proposalId: proposalIdParam,
+            title,
+            description,
+            startDate,
+            endDate,
+        } = req.body;
+
+        const targetProposalId = proposalParam || proposalIdParam;
+
+        if (!targetProposalId || !title || !title.trim()) {
+            return next(
+                appError({
+                    statusCode: StatusCodes.BAD_REQUEST,
+                    message: "proposal and title are required fields",
+                    statusText: statusText.FAIL,
+                })
+            );
+        }
+
+        // 2. Find Proposal and populate Job
+        const proposalDoc = await Proposal.findById(targetProposalId).populate("job");
+        if (!proposalDoc) {
+            return next(
+                appError({
+                    statusCode: StatusCodes.NOT_FOUND,
+                    message: "Proposal not found",
+                    statusText: statusText.FAIL,
+                })
+            );
+        }
+
+        // 3. Verify Proposal belongs to the Client's Job
+        const jobDoc = proposalDoc.job as any;
+        if (!jobDoc || !jobDoc.client || jobDoc.client.toString() !== currentUserId.toString()) {
+            return next(
+                appError({
+                    statusCode: StatusCodes.FORBIDDEN,
+                    message: "You are not authorized to create a contract for this proposal",
+                    statusText: statusText.FAIL,
+                })
+            );
+        }
+
+        // 4. Verify Proposal status is ACCEPTED
+        if (proposalDoc.status !== ProposalStatus.ACCEPTED && (proposalDoc.status as string) !== "accepted") {
+            return next(
+                appError({
+                    statusCode: StatusCodes.BAD_REQUEST,
+                    message: "A contract can only be created for an accepted proposal",
+                    statusText: statusText.FAIL,
+                })
+            );
+        }
+
+        // 5. Verify a Contract does not already exist for this Proposal
+        const existingContract = await Contract.findOne({ proposal: proposalDoc._id });
         if (existingContract) {
             return next(
                 appError({
@@ -143,38 +188,50 @@ export const createContract = asyncWrapper(
             );
         }
 
-        // 3. Create contract
+        // 6. Create Draft Contract with totalAmount derived directly from Proposal.bidAmount
         const newContract = await Contract.create({
-            job,
-            proposal,
-            client,
-            freelancer,
-            type,
-            title,
-            description: description || null,
-            totalAmount,
-            startDate: startDate || null,
-            endDate: endDate || null,
-            status: status || ContractStatus.DRAFT,
+            job: jobDoc._id,
+            proposal: proposalDoc._id,
+            client: currentUserId,
+            freelancer: proposalDoc.freelancer,
+            type: jobDoc.type || ContractType.FIXED,
+            title: title.trim(),
+            description: description && description.trim() ? description.trim() : null,
+            totalAmount: proposalDoc.bidAmount,
+            startDate: startDate ? new Date(startDate) : null,
+            endDate: endDate ? new Date(endDate) : null,
+            status: ContractStatus.DRAFT,
+            clientAcceptedAt: new Date(),
         });
 
-        // 4. Update corresponding Conversation BEFORE populating (using raw ObjectIds)
-        await Conversation.findOneAndUpdate(
-            { client, freelancer, job },
+        // 7. Associate Contract with corresponding Conversation
+        const conversation = await Conversation.findOneAndUpdate(
+            { client: currentUserId, freelancer: proposalDoc.freelancer, job: jobDoc._id },
             { contract: newContract._id },
             { new: true }
         );
 
-        // 5. Populate references for response
+        // 8. Populate references for response
         await newContract.populate([
             { path: "client", select: "firstName lastName email avatar" },
             { path: "freelancer", select: "firstName lastName email avatar" },
-            { path: "job", select: "title" },
+            { path: "job", select: "title description type budget status" },
+            { path: "proposal" },
         ]);
+
+        // 9. Real-time Socket.IO emission
+        try {
+            if (conversation) {
+                getIO().to(`conversation:${conversation._id}`).emit("contract:created", newContract);
+            }
+            getIO().to(`user:${proposalDoc.freelancer}`).emit("contract:created", newContract);
+        } catch (socketError) {
+            console.error("Socket emission failed:", socketError);
+        }
 
         return res.status(StatusCodes.CREATED).json({
             status: statusText.SUCCESS,
-            message: "Contract created successfully",
+            message: "Draft contract created successfully",
             data: {
                 contract: newContract,
             },
@@ -183,11 +240,80 @@ export const createContract = asyncWrapper(
 );
 
 // ==========================================
-// 4. EDIT / UPDATE CONTRACT
+// 4. SEND CONTRACT TO FREELANCER (Explicit Send/Review Action)
+// ==========================================
+export const sendContract = asyncWrapper(
+    async (req: Request, res: Response, next: NextFunction) => {
+        const { id } = req.params;
+        const currentUserId = req.currentUser?._id;
+
+        const contract = await Contract.findById(id)
+            .populate("client", "firstName lastName avatar email")
+            .populate("freelancer", "firstName lastName avatar email")
+            .populate("job", "title");
+
+        if (!contract) {
+            return next(
+                appError({
+                    statusCode: StatusCodes.NOT_FOUND,
+                    message: "Contract not found",
+                    statusText: statusText.FAIL,
+                })
+            );
+        }
+
+        // Verify Client ownership
+        if (contract.client?._id ? contract.client._id.toString() !== currentUserId?.toString() : contract.client.toString() !== currentUserId?.toString()) {
+            return next(
+                appError({
+                    statusCode: StatusCodes.FORBIDDEN,
+                    message: "You are not authorized to send this contract",
+                    statusText: statusText.FAIL,
+                })
+            );
+        }
+
+        if (contract.status !== ContractStatus.DRAFT) {
+            return next(
+                appError({
+                    statusCode: StatusCodes.BAD_REQUEST,
+                    message: "Only draft contracts can be sent for review",
+                    statusText: statusText.FAIL,
+                })
+            );
+        }
+
+        // Send notification to Freelancer
+        await notifyFreelancerOnContractOffer(contract);
+
+        // Emit socket event to conversation room
+        try {
+            const conversation = await Conversation.findOne({ contract: contract._id });
+            if (conversation) {
+                getIO().to(`conversation:${conversation._id}`).emit("contract:sent", contract);
+                getIO().to(`conversation:${conversation._id}`).emit("contract:updated", contract);
+            }
+        } catch (socketError) {
+            console.error("Socket emission failed:", socketError);
+        }
+
+        res.status(StatusCodes.OK).json({
+            status: statusText.SUCCESS,
+            message: "Contract sent to freelancer for review successfully",
+            data: {
+                contract,
+            },
+        });
+    }
+);
+
+// ==========================================
+// 5. EDIT / UPDATE CONTRACT (Only Allowed While DRAFT)
 // ==========================================
 export const updateContract = asyncWrapper(
     async (req: Request, res: Response, next: NextFunction) => {
         const { id } = req.params;
+        const currentUserId = req.currentUser?._id;
         const body = req.body;
 
         if (!body || Object.keys(body).length === 0) {
@@ -200,33 +326,8 @@ export const updateContract = asyncWrapper(
             );
         }
 
-        // Auto-assign timestamp fields based on status update
-        if (body.status) {
-            const now = new Date();
-            if (body.status === ContractStatus.ACTIVE) {
-                if (!body.startDate) body.startDate = now;
-            } else if (body.status === ContractStatus.COMPLETED) {
-                body.completedAt = now;
-            } else if (body.status === ContractStatus.CANCELLED) {
-                body.cancelledAt = now;
-            } else if (body.status === ContractStatus.REJECTED) {
-                body.rejectedAt = now;
-            }
-        }
-
-        const updatedContract = await Contract.findByIdAndUpdate(
-            id,
-            { $set: body },
-            {
-                new: true,
-                runValidators: true,
-            }
-        )
-            .populate("client", "firstName lastName avatar email")
-            .populate("freelancer", "firstName lastName avatar email")
-            .populate("job", "title");
-
-        if (!updatedContract) {
+        const contract = await Contract.findById(id);
+        if (!contract) {
             return next(
                 appError({
                     statusCode: StatusCodes.NOT_FOUND,
@@ -234,6 +335,59 @@ export const updateContract = asyncWrapper(
                     statusText: statusText.FAIL,
                 })
             );
+        }
+
+        // Verify Client authorization
+        if (contract.client.toString() !== currentUserId?.toString()) {
+            return next(
+                appError({
+                    statusCode: StatusCodes.FORBIDDEN,
+                    message: "You are not authorized to update this contract",
+                    statusText: statusText.FAIL,
+                })
+            );
+        }
+
+        // Ensure contract is still in DRAFT mode
+        if (contract.status !== ContractStatus.DRAFT) {
+            return next(
+                appError({
+                    statusCode: StatusCodes.BAD_REQUEST,
+                    message: "Cannot modify a contract that is not in draft status",
+                    statusText: statusText.FAIL,
+                })
+            );
+        }
+
+        // Apply editable fields (title, description, dates)
+        if (body.title && body.title.trim()) contract.title = body.title.trim();
+        if (body.description !== undefined) {
+            contract.description = body.description && body.description.trim() ? body.description.trim() : null;
+        }
+        if (body.startDate !== undefined) {
+            contract.startDate = body.startDate ? new Date(body.startDate) : null;
+        }
+        if (body.endDate !== undefined) {
+            contract.endDate = body.endDate ? new Date(body.endDate) : null;
+        }
+
+        await contract.save();
+
+        const updatedContract = await Contract.findById(id)
+            .populate("client", "firstName lastName avatar email")
+            .populate("freelancer", "firstName lastName avatar email")
+            .populate("job", "title description type budget status")
+            .populate("proposal");
+
+        // Emit realtime socket event
+        try {
+            const conversation = await Conversation.findOne({ contract: contract._id });
+            if (conversation) {
+                getIO().to(`conversation:${conversation._id}`).emit("contract:updated", updatedContract);
+            }
+            getIO().to(`user:${contract.freelancer}`).emit("contract:updated", updatedContract);
+        } catch (socketError) {
+            console.error("Socket emission failed:", socketError);
         }
 
         res.status(StatusCodes.OK).json({
@@ -247,24 +401,28 @@ export const updateContract = asyncWrapper(
 );
 
 // ==========================================
-// 5. ACCEPT / REJECT CONTRACT
+// 6. ACCEPT / REJECT CONTRACT (Freelancer Response)
 // ==========================================
 export const respondToContract = asyncWrapper(
     async (req: Request, res: Response, next: NextFunction) => {
         const { id } = req.params;
-        const { action, userId, rejectionReason } = req.body; // action: "accept" | "reject"
+        const currentUserId = req.currentUser?._id;
+        const { action, rejectionReason } = req.body; // action: "accept" | "reject"
 
-        if (!action || !userId) {
+        if (!action || !["accept", "reject"].includes(action)) {
             return next(
                 appError({
                     statusCode: StatusCodes.BAD_REQUEST,
-                    message: "action ('accept' | 'reject') and userId are required",
+                    message: "Action must be either 'accept' or 'reject'",
                     statusText: statusText.FAIL,
                 })
             );
         }
 
-        const contract = await Contract.findById(id);
+        const contract = await Contract.findById(id)
+            .populate("client", "firstName lastName avatar email")
+            .populate("freelancer", "firstName lastName avatar email")
+            .populate("job", "title description type budget status");
 
         if (!contract) {
             return next(
@@ -276,45 +434,97 @@ export const respondToContract = asyncWrapper(
             );
         }
 
-        const now = new Date();
-        const isClient = contract.client.toString() === userId;
-        const isFreelancer = contract.freelancer.toString() === userId;
+        const freelancerId =
+            contract.freelancer && (contract.freelancer as any)._id
+                ? (contract.freelancer as any)._id.toString()
+                : contract.freelancer.toString();
 
-        if (!isClient && !isFreelancer) {
+        if (freelancerId !== currentUserId?.toString()) {
             return next(
                 appError({
                     statusCode: StatusCodes.FORBIDDEN,
-                    message: "User is not a party to this contract",
+                    message: "Only the assigned freelancer can accept or reject this contract",
                     statusText: statusText.FAIL,
                 })
             );
         }
 
-        if (action === "accept") {
-            if (isClient) contract.clientAcceptedAt = now;
-            if (isFreelancer) contract.freelancerAcceptedAt = now;
-
-            // Activate contract when accepted by both parties
-            if (contract.clientAcceptedAt && contract.freelancerAcceptedAt) {
-                contract.status = ContractStatus.ACTIVE;
-                contract.startDate = contract.startDate || now;
-            }
-        } else if (action === "reject") {
-            contract.status = ContractStatus.REJECTED;
-            contract.rejectedAt = now;
-            contract.rejectedBy = userId as any;
-            contract.rejectionReason = rejectionReason || null;
-        } else {
+        // Contract can only be responded to while in DRAFT status
+        if (contract.status !== ContractStatus.DRAFT) {
             return next(
                 appError({
                     statusCode: StatusCodes.BAD_REQUEST,
-                    message: "Invalid action. Expected 'accept' or 'reject'",
+                    message: `Cannot respond to contract in '${contract.status}' status.`,
                     statusText: statusText.FAIL,
                 })
             );
         }
 
-        await contract.save();
+        const now = new Date();
+
+        if (action === "accept") {
+            contract.status = ContractStatus.ACTIVE;
+            contract.freelancerAcceptedAt = now;
+            if (!contract.startDate) {
+                contract.startDate = now;
+            }
+
+            await contract.save();
+
+            // Optionally activate the first milestone: PENDING -> IN_PROGRESS
+            const firstMilestone = await Milestone.findOne({ contract: contract._id }).sort({ order: 1 });
+            if (firstMilestone && firstMilestone.status === MilestoneStatus.PENDING) {
+                firstMilestone.status = MilestoneStatus.IN_PROGRESS;
+                await firstMilestone.save();
+
+                try {
+                    const conversation = await Conversation.findOne({ contract: contract._id });
+                    if (conversation) {
+                        getIO().to(`conversation:${conversation._id}`).emit("milestone:updated", firstMilestone);
+                    }
+                } catch (socketErr) {
+                    console.error("Failed to emit milestone update:", socketErr);
+                }
+            }
+
+            // Dispatch notification to Client
+            await notifyClientOnContractAccepted(contract);
+        } else if (action === "reject") {
+            if (!rejectionReason || !rejectionReason.trim()) {
+                return next(
+                    appError({
+                        statusCode: StatusCodes.BAD_REQUEST,
+                        message: "A rejection reason is required when rejecting a contract",
+                        statusText: statusText.FAIL,
+                    })
+                );
+            }
+
+            contract.status = ContractStatus.REJECTED;
+            contract.rejectedAt = now;
+            contract.rejectedBy = currentUserId as any;
+            contract.rejectionReason = rejectionReason.trim();
+
+            await contract.save();
+
+            // Dispatch notification to Client
+            await notifyClientOnContractRejected(contract);
+        }
+
+        // Socket.IO emission to conversation room and client room
+        try {
+            const conversation = await Conversation.findOne({ contract: contract._id });
+            if (conversation) {
+                getIO().to(`conversation:${conversation._id}`).emit("contract:updated", contract);
+            }
+            const clientId =
+                contract.client && (contract.client as any)._id
+                    ? (contract.client as any)._id
+                    : contract.client;
+            getIO().to(`user:${clientId}`).emit("contract:updated", contract);
+        } catch (socketError) {
+            console.error("Socket emission failed:", socketError);
+        }
 
         res.status(StatusCodes.OK).json({
             status: statusText.SUCCESS,
@@ -327,17 +537,14 @@ export const respondToContract = asyncWrapper(
 );
 
 // ==========================================
-// 6. DELETE CONTRACT
+// 7. DELETE CONTRACT (Only Allowed While DRAFT or REJECTED)
 // ==========================================
-
-
 export const deleteContract = asyncWrapper(
     async (req: Request, res: Response, next: NextFunction) => {
         const { id } = req.params;
+        const currentUserId = req.currentUser?._id;
 
-        // 1. Find contract first to access client, freelancer, and job IDs
         const contract = await Contract.findById(id);
-
         if (!contract) {
             return next(
                 appError({
@@ -348,19 +555,56 @@ export const deleteContract = asyncWrapper(
             );
         }
 
-        // 2. Unset/Nullify the contract reference in the associated Conversation
-        await Conversation.findOneAndUpdate(
+        // Verify Client ownership
+        if (contract.client.toString() !== currentUserId?.toString()) {
+            return next(
+                appError({
+                    statusCode: StatusCodes.FORBIDDEN,
+                    message: "You are not authorized to delete this contract",
+                    statusText: statusText.FAIL,
+                })
+            );
+        }
+
+        if (contract.status === ContractStatus.ACTIVE || contract.status === ContractStatus.COMPLETED) {
+            return next(
+                appError({
+                    statusCode: StatusCodes.BAD_REQUEST,
+                    message: "Cannot delete an active or completed contract",
+                    statusText: statusText.FAIL,
+                })
+            );
+        }
+
+        // Delete associated Milestones
+        await Milestone.deleteMany({ contract: contract._id });
+
+        // Unset contract reference in Conversation
+        const conversation = await Conversation.findOneAndUpdate(
             {
                 $or: [
                     { contract: contract._id },
                     { client: contract.client, freelancer: contract.freelancer, job: contract.job },
                 ],
             },
-            { $set: { contract: null } }
+            { $set: { contract: null } },
+            { new: true }
         );
 
-        // 3. Delete the contract
+        // Delete Contract
         await contract.deleteOne();
+
+        // Realtime socket event
+        try {
+            if (conversation) {
+                getIO().to(`conversation:${conversation._id}`).emit("contract:deleted", {
+                    contractId: id,
+                    conversationId: conversation._id,
+                });
+            }
+        } catch (socketError) {
+            console.error("Socket emission failed:", socketError);
+        }
 
         return res.status(StatusCodes.OK).json({
             status: statusText.SUCCESS,
