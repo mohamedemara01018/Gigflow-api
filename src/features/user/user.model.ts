@@ -3,6 +3,12 @@ import { UserRole, UserStatus } from "../../utils/enums.utils";
 
 const userSchema = new Schema(
     {
+        /*
+        |--------------------------------------------------------------------------
+        | Basic Information
+        |--------------------------------------------------------------------------
+        */
+
         firstName: {
             type: String,
             required: true,
@@ -28,11 +34,25 @@ const userSchema = new Schema(
             required: true,
         },
 
+        /*
+        |--------------------------------------------------------------------------
+        | Role
+        |--------------------------------------------------------------------------
+        */
+
         role: {
             type: String,
             enum: Object.values(UserRole),
             default: UserRole.CLIENT,
+            required: true,
+            index: true,
         },
+
+        /*
+        |--------------------------------------------------------------------------
+        | Profile
+        |--------------------------------------------------------------------------
+        */
 
         avatar: {
             type: String,
@@ -61,14 +81,27 @@ const userSchema = new Schema(
             default: null,
         },
 
+        /*
+        |--------------------------------------------------------------------------
+        | Online Presence
+        |--------------------------------------------------------------------------
+        */
+
         isOnline: {
             type: Boolean,
-            default: false
+            default: false,
         },
+
         lastSeen: {
             type: Date,
-            default: Date.now
+            default: Date.now,
         },
+
+        /*
+        |--------------------------------------------------------------------------
+        | Email Verification
+        |--------------------------------------------------------------------------
+        */
 
         verifiedEmailCode: {
             type: String,
@@ -76,8 +109,15 @@ const userSchema = new Schema(
         },
 
         emailCodeExpiresAt: {
-            type: String,
+            type: Date,
+            default: null,
         },
+
+        /*
+        |--------------------------------------------------------------------------
+        | Phone Verification
+        |--------------------------------------------------------------------------
+        */
 
         verifiedPhoneCode: {
             type: String,
@@ -85,17 +125,31 @@ const userSchema = new Schema(
         },
 
         phoneCodeExpiresAt: {
-            type: String,
+            type: Date,
+            default: null,
         },
+
+        /*
+        |--------------------------------------------------------------------------
+        | Password Reset
+        |--------------------------------------------------------------------------
+        */
 
         resetToken: {
             type: String,
             default: null,
         },
+
         resetTokenExpiresAt: {
-            type: String,
+            type: Date,
             default: null,
         },
+
+        /*
+        |--------------------------------------------------------------------------
+        | Verification
+        |--------------------------------------------------------------------------
+        */
 
         isEmailVerified: {
             type: Boolean,
@@ -112,10 +166,22 @@ const userSchema = new Schema(
             default: false,
         },
 
+        /*
+        |--------------------------------------------------------------------------
+        | Two Factor Authentication
+        |--------------------------------------------------------------------------
+        */
+
         twoFactorEnabled: {
             type: Boolean,
             default: false,
         },
+
+        /*
+        |--------------------------------------------------------------------------
+        | OAuth
+        |--------------------------------------------------------------------------
+        */
 
         provider: {
             type: String,
@@ -128,18 +194,86 @@ const userSchema = new Schema(
             default: null,
         },
 
+        /*
+        |--------------------------------------------------------------------------
+        | Stripe Customer
+        |--------------------------------------------------------------------------
+        |
+        | Used by CLIENT users to:
+        |
+        | - Save payment methods
+        | - Create SetupIntents
+        | - Create PaymentIntents
+        | - Make payments
+        |
+        */
+
+        stripeCustomerId: {
+            type: String,
+            default: null,
+            unique: true,
+            sparse: true,
+            index: true,
+        },
+
+        /*
+        |--------------------------------------------------------------------------
+        | Stripe Connect Account
+        |--------------------------------------------------------------------------
+        |
+        | Used by FREELANCER users to receive payouts.
+        |
+        */
+
+        stripeConnectAccountId: {
+            type: String,
+            default: null,
+            unique: true,
+            sparse: true,
+            index: true,
+        },
+
+        stripeConnectOnboardingComplete: {
+            type: Boolean,
+            default: false,
+            index: true,
+        },
+
+        /*
+        |--------------------------------------------------------------------------
+        | Account Status
+        |--------------------------------------------------------------------------
+        */
+
         status: {
             type: String,
             enum: Object.values(UserStatus),
             default: UserStatus.ACTIVE,
+            required: true,
+            index: true,
         },
 
-        lastLoginAt: Date,
+        /*
+        |--------------------------------------------------------------------------
+        | Authentication
+        |--------------------------------------------------------------------------
+        */
+
+        lastLoginAt: {
+            type: Date,
+            default: null,
+        },
 
         refreshTokenVersion: {
             type: Number,
             default: 0,
         },
+
+        /*
+        |--------------------------------------------------------------------------
+        | Soft Delete
+        |--------------------------------------------------------------------------
+        */
 
         deletedAt: {
             type: Date,
@@ -152,11 +286,23 @@ const userSchema = new Schema(
     }
 );
 
+/*
+|--------------------------------------------------------------------------
+| Text Search
+|--------------------------------------------------------------------------
+*/
+
 userSchema.index({
     firstName: "text",
     lastName: "text",
     email: "text",
 });
+
+/*
+|--------------------------------------------------------------------------
+| Common Filters
+|--------------------------------------------------------------------------
+*/
 
 userSchema.index({
     role: 1,

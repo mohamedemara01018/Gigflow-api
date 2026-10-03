@@ -34,7 +34,7 @@ import conversationRoutes from './features/conversation/conversation.routes'
 import messageRoutes from './features/message/message.routes'
 import contractRoutes from './features/contract/contract.routes';
 import milestoneRoutes from './features/milestone/milestone.routes'
-
+import paymentMethodRoutes from './features/payment-method/paymentMethod.route'
 
 const app: Application = express();
 
@@ -66,7 +66,14 @@ const limiter = rateLimit({
 // app.use("/api", limiter);
 
 // Body Parsers
-app.use(express.json({ limit: "10mb" }));
+app.use(
+    express.json({
+        limit: "10mb",
+        verify: (req: any, _res, buf) => {
+            req.rawBody = buf;
+        },
+    })
+);
 app.use(express.urlencoded({ extended: true }));
 
 // Cookies
@@ -111,16 +118,18 @@ app.use("/api/job", jobRoutes);
 app.use("/api/proposal", proposalRoutes);
 app.use("/api/save-job", saveJobRoutes);
 app.use("/api/attachment", attachmentRoutes);
-app.use('/api/portfolio-item', portfolioItemRoutes)
-app.use('/api/verifiction', verificationRoutes)
-app.use('/api/country', countryRoutes)
-app.use('/api/city', cityRoutes)
-app.use('/api/notification', notificationRoutes)
-app.use('/api/client-stats', clientStatsRoutes)
-app.use('/api/conversation', conversationRoutes)
+app.use('/api/portfolio-item', portfolioItemRoutes);
+app.use('/api/verifiction', verificationRoutes);
+app.use('/api/country', countryRoutes);
+app.use('/api/city', cityRoutes);
+app.use('/api/notification', notificationRoutes);
+app.use('/api/client-stats', clientStatsRoutes);
+app.use('/api/conversation', conversationRoutes);
 app.use('/api/message', messageRoutes);
 app.use('/api/contract', contractRoutes);
 app.use('/api/milestone', milestoneRoutes);
+app.use('/api/payment-methods', paymentMethodRoutes);
+app.use('/api/stripe', paymentMethodRoutes);
 
 /* ===========================
     404 Handler
