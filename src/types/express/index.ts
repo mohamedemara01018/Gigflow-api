@@ -1,6 +1,4 @@
-import "express";
 import { Types } from "mongoose";
-import "multer";
 
 declare global {
     namespace Express {
@@ -12,9 +10,8 @@ declare global {
                 firstName?: string;
                 lastName?: string;
             };
-            // Use Express.Multer.File instead of just Multer.File
-            file?: Express.Multer.File,
-            // files?: Express.Multer.File[];
+            file?: Express.Multer.File;
+            files?: Express.Multer.File[] | { [fieldname: string]: Express.Multer.File[] };
         }
     }
 }

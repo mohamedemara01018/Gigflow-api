@@ -1,9 +1,7 @@
 {
   "compilerOptions": {
-    /* File Layout */
     "rootDir": "./src",
     "outDir": "./dist",
-    /* Target & Environment */
     "target": "ES2022",
     "module": "NodeNext",
     "moduleResolution": "NodeNext",
@@ -13,25 +11,22 @@
     "types": [
       "node"
     ],
-    /* Interop & Type Resolution */
+    "typeRoots": [
+      "./node_modules/@types",
+      "./src/types"
+    ],
     "esModuleInterop": true,
     "allowSyntheticDefaultImports": true,
     "forceConsistentCasingInFileNames": true,
-    "typeRoots": [
-      "./node_modules/@types"
-    ],
-    /* Outputs */
     "sourceMap": true,
     "declaration": true,
     "declarationMap": true,
-    /* Type Checking */
     "strict": true,
     "noImplicitAny": false,
     "skipLibCheck": true
   },
   "include": [
-    "src/**/*",
-    "api/**/*"
+    "src/**/*"
   ],
   "exclude": [
     "node_modules",
