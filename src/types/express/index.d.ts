@@ -11,7 +11,7 @@ declare global {
                 lastName?: string;
             };
             file?: Express.Multer.File;
-            files?: Express.Multer.File[] | { [fieldname: string]: Express.Multer.File[] };
+            files?: Express.Multer.File[] | { [key: string]: Express.Multer.File[] };
         }
     }
 }
