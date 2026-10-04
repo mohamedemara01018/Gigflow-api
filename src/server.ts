@@ -1,4 +1,3 @@
-// src/server.ts
 import "./types/express/index.js";
 import dotenv from "dotenv";
 dotenv.config();
@@ -12,25 +11,15 @@ const PORT = process.env.PORT || 5000;
 
 const startServer = async (): Promise<void> => {
     try {
-        // Connect to MongoDB
         await connectDB();
 
-        // Create HTTP server
         const server = http.createServer(app);
 
-        // Initialize Socket.IO
         initializeSocket(server);
 
-        // Start HTTP server
         server.listen(PORT, () => {
-            console.log(
-                `🚀 Server is running on http://localhost:${PORT}`
-            );
-
-            console.log(
-                `🔌 Socket.IO is running on http://localhost:${PORT}`
-            );
-
+            console.log(`🚀 Server is running on http://localhost:${PORT}`);
+            console.log(`🔌 Socket.IO is running on http://localhost:${PORT}`);
             console.log(
                 `🌍 Environment: ${process.env.NODE_ENV || "development"}`
             );
@@ -43,7 +32,6 @@ const startServer = async (): Promise<void> => {
 
 startServer();
 
-// Handle unexpected errors
 process.on("unhandledRejection", (reason) => {
     console.error("❌ Unhandled Rejection:", reason);
     process.exit(1);
