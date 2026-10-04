@@ -1,5 +1,5 @@
 import { Schema, model, Types } from "mongoose";
-import { DocumentType, VerificationStatus } from "../../utils/enums.utils";
+import { DocumentType, VerificationStatus } from "../../utils/enums.utils.js";
 
 
 

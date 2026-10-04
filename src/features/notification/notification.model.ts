@@ -1,5 +1,5 @@
 import { Schema, model, Types } from "mongoose";
-import { NotificationEntityType, NotificationType } from "../../utils/enums.utils";
+import { NotificationEntityType, NotificationType } from "../../utils/enums.utils.js";
 
 
 

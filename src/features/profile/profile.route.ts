@@ -1,5 +1,5 @@
 import express from 'express';
-import { createNewProfile, editProfile, getAllProfiles, getUserProfileById } from './profile.controller';
+import { createNewProfile, editProfile, getAllProfiles, getUserProfileById } from './profile.controller.js';
 
 
 const router = express.Router();

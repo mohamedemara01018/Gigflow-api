@@ -1,5 +1,5 @@
 import { Schema, model, Types } from "mongoose";
-import { PortfolioProjectStatus } from "../../utils/enums.utils";
+import { PortfolioProjectStatus } from "../../utils/enums.utils.js";
 
 
 const portfolioItemSchema = new Schema(

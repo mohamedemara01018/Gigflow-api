@@ -6,8 +6,8 @@ import {
     markAllAsRead,
     deleteNotification,
     clearAllNotifications,
-} from "./notification.controller";
-import { authenticationMiddleware } from "../../middleware/authentication.middleware";
+} from "./notification.controller.js";
+import { authenticationMiddleware } from "../../middleware/authentication.middleware.js";
 
 const router = Router();
 

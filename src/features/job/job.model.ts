@@ -1,5 +1,5 @@
 import { Schema, model, Types } from "mongoose";
-import { ExperienceLevel, JobDuration, JobStatus, JobType, JobVisibility } from "../../utils/enums.utils";
+import { ExperienceLevel, JobDuration, JobStatus, JobType, JobVisibility } from "../../utils/enums.utils.js";
 
 
 

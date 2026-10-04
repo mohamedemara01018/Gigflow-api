@@ -1,5 +1,5 @@
 import { Schema, model, Types } from "mongoose";
-import { DeliveryDurationUnit, ProposalStatus } from "../../utils/enums.utils";
+import { DeliveryDurationUnit, ProposalStatus } from "../../utils/enums.utils.js";
 
 
 

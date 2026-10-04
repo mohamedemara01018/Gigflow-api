@@ -1,6 +1,6 @@
-import { Attachment } from "../features/attachment/attachment.model";
-import { destroyImageFromCloudinary } from "./cloudinary.utils";
-import { AttachmentEntityType } from "./enums.utils";
+import { Attachment } from "../features/attachment/attachment.model.js";
+import { destroyImageFromCloudinary } from "./cloudinary.utils.js";
+import { AttachmentEntityType } from "./enums.utils.js";
 
 export const deleteAttachmentsByEntity = async (
     entityType: AttachmentEntityType,

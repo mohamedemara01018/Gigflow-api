@@ -1,5 +1,5 @@
 import { Schema, model, Types } from "mongoose";
-import { ContactSupportCategory, ContactSupportStatus } from "../../utils/enums.utils";
+import { ContactSupportCategory, ContactSupportStatus } from "../../utils/enums.utils.js";
 
 
 

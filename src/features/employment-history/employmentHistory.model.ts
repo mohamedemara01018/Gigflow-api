@@ -1,5 +1,5 @@
 import mongoose from "mongoose";
-import { EmploymentType } from "../../utils/enums.utils";
+import { EmploymentType } from "../../utils/enums.utils.js";
 
 const employmentHistorySchema = new mongoose.Schema(
     {

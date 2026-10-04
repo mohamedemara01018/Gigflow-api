@@ -1,5 +1,5 @@
 import { Schema, model, Types } from "mongoose";
-import { MessageStatus, MessageType } from "../../utils/enums.utils";
+import { MessageStatus, MessageType } from "../../utils/enums.utils.js";
 
 
 const messageSchema = new Schema(

@@ -1,5 +1,5 @@
 import mongoose from "mongoose";
-import { SkillLevel } from "../../utils/enums.utils";
+import { SkillLevel } from "../../utils/enums.utils.js";
 
 const profileSkillSchema = new mongoose.Schema(
     {

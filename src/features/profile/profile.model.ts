@@ -1,6 +1,6 @@
 import mongoose from "mongoose";
-import { AvailabilityStatus, ExperienceLevel, ProfileVisibility } from "../../utils/enums.utils";
-import { IProfileInput } from "../../types/schemeTypes";
+import { AvailabilityStatus, ExperienceLevel, ProfileVisibility } from "../../utils/enums.utils.js";
+import { IProfileInput } from "../../types/schemeTypes.js";
 
 
 const socialSchema = new mongoose.Schema(

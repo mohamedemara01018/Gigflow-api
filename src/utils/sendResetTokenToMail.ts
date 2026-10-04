@@ -1,4 +1,4 @@
-import { transporter } from "../config/mail.config";
+import { transporter } from "../config/mail.config.js";
 
 interface SendResetTokenToMailProps {
     email: string;

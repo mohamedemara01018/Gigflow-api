@@ -1,5 +1,5 @@
 import { Schema, model, Types } from "mongoose";
-import { ConversationStatus } from "../../utils/enums.utils";
+import { ConversationStatus } from "../../utils/enums.utils.js";
 
 
 

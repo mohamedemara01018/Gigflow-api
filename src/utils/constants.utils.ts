@@ -1,9 +1,9 @@
-import { IProfileInput } from "../types/schemeTypes";
+import { IProfileInput } from "../types/schemeTypes.js";
 import {
     AvailabilityStatus,
     ExperienceLevel,
     ProfileVisibility,
-} from "../utils/enums.utils";
+} from "../utils/enums.utils.js";
 
 export const defaultProfile: Omit<IProfileInput, "user"> = {
     title: "",

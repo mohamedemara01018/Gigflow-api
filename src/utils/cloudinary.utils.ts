@@ -1,5 +1,5 @@
 import { Readable } from "stream";
-import cloudinary from "../config/cloudinary.config";
+import cloudinary from "../config/cloudinary.config.js";
 
 export interface ICloudinaryProbs {
     asset_id: string;

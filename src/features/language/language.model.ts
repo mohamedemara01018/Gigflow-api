@@ -1,5 +1,5 @@
 import mongoose from "mongoose";
-import { LanguageLevel } from "../../utils/enums.utils";
+import { LanguageLevel } from "../../utils/enums.utils.js";
 
 const languageSchema = new mongoose.Schema(
     {

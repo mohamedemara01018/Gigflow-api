@@ -1,5 +1,5 @@
 import { Schema, model, Types } from "mongoose";
-import { AttachmentEntityType, AttachmentType } from "../../utils/enums.utils";
+import { AttachmentEntityType, AttachmentType } from "../../utils/enums.utils.js";
 
 
 

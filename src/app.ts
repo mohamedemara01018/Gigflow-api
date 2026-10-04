@@ -8,34 +8,34 @@ import morgan from "morgan";
 import cookieParser from "cookie-parser";
 import rateLimit from "express-rate-limit";
 import { StatusCodes } from 'http-status-codes'
-import { globalErrorHandler } from "./middleware/globalErrorHandler.middleware";
-import authRoutes from './features/auth/auth.routes';
-import userRoutes from './features/user/user.routes';
-import profileRoutes from './features/profile/profile.route'
-import languageRoutes from './features/language/language.route'
-import certificationRoutes from './features/certification/certification.route'
-import educationRoutes from './features/education/education.route'
-import employmentHistoryRoutes from './features/employment-history/employmentHistory.route'
-import categoryRoutes from './features/category/category.route'
-import skillRoutes from './features/skill/skill.route'
-import profileSkillRoutes from './features/profile-skill/profileSkill.route'
-import jobSkillRoutes from './features/job-skill/jobSkill.routes'
-import jobRoutes from './features/job/job.route'
-import proposalRoutes from './features/proposal/proposal.route'
-import saveJobRoutes from './features/save-job/savedJob.route'
-import attachmentRoutes from './features/attachment/attachment.route'
-import portfolioItemRoutes from './features/portfolio-item/portfolioItem.route'
-import verificationRoutes from './features/verification-request/verificationRequest.route'
-import countryRoutes from './features/country/country.route';
-import cityRoutes from './features/city/city.route'
-import notificationRoutes from './features/notification/notification.routes'
-import clientStatsRoutes from './features/clientStats/clientStats.route';
-import conversationRoutes from './features/conversation/conversation.routes'
-import messageRoutes from './features/message/message.routes'
-import contractRoutes from './features/contract/contract.routes';
-import milestoneRoutes from './features/milestone/milestone.routes'
-import paymentMethodRoutes from './features/payment-method/paymentMethod.route'
-import contactSupportRoutes from './features/contact-support/contactSupport.route'
+import { globalErrorHandler } from "./middleware/globalErrorHandler.middleware.js";
+import authRoutes from './features/auth/auth.routes.js';
+import userRoutes from './features/user/user.routes.js';
+import profileRoutes from './features/profile/profile.route.js';
+import languageRoutes from './features/language/language.route.js';
+import certificationRoutes from './features/certification/certification.route.js';
+import educationRoutes from './features/education/education.route.js';
+import employmentHistoryRoutes from './features/employment-history/employmentHistory.route.js';
+import categoryRoutes from './features/category/category.route.js';
+import skillRoutes from './features/skill/skill.route.js';
+import profileSkillRoutes from './features/profile-skill/profileSkill.route.js';
+import jobSkillRoutes from './features/job-skill/jobSkill.routes.js';
+import jobRoutes from './features/job/job.route.js';
+import proposalRoutes from './features/proposal/proposal.route.js';
+import saveJobRoutes from './features/save-job/savedJob.route.js';
+import attachmentRoutes from './features/attachment/attachment.route.js';
+import portfolioItemRoutes from './features/portfolio-item/portfolioItem.route.js';
+import verificationRoutes from './features/verification-request/verificationRequest.route.js';
+import countryRoutes from './features/country/country.route.js';
+import cityRoutes from './features/city/city.route.js';
+import notificationRoutes from './features/notification/notification.routes.js';
+import clientStatsRoutes from './features/clientStats/clientStats.route.js';
+import conversationRoutes from './features/conversation/conversation.routes.js';
+import messageRoutes from './features/message/message.routes.js';
+import contractRoutes from './features/contract/contract.routes.js';
+import milestoneRoutes from './features/milestone/milestone.routes.js';
+import paymentMethodRoutes from './features/payment-method/paymentMethod.route.js';
+import contactSupportRoutes from './features/contact-support/contactSupport.route.js';
 
 const app: Application = express();
 
