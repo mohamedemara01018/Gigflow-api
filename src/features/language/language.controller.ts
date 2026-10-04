@@ -1,11 +1,9 @@
 import { Request, Response, NextFunction } from "express";
 import { StatusCodes } from "http-status-codes";
-import { Language } from "./language.model.js";
 import { appError } from "../../utils/appError.utils.js";
 import asyncWrapper from "../../utils/asyncWrapper.utils.js";
 import { statusText } from "../../utils/enums.utils.js";
-import mongoose from "mongoose";
-import { ILanguage } from "../../types/schemeTypes.js";
+import { Language } from "./language.model.js";
 
 // ==========================================
 // 1. GET ALL LANGUAGES (Optionally by Profile)

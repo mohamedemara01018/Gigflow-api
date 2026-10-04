@@ -6,7 +6,7 @@ import { appError } from "../../utils/appError.utils.js";
 import generator from "generate-password";
 import dotenv from 'dotenv';
 import asyncWrapper from "../../utils/asyncWrapper.utils.js";
-import { Sign, statusText } from "../../utils/enums.utils.js";
+import { GoogleTokenResponse, GoogleUserProfile, Sign, statusText } from "../../utils/enums.utils.js";
 import { sendCodeToMail } from "../../utils/sendCodeToMail.js";
 import { UserRole } from '../../utils/enums.utils.js'
 import { sendResetTokenToMail } from "../../utils/sendResetTokenToMail.js";
@@ -275,7 +275,7 @@ const resendEmailCode = asyncWrapper(async (req: Request, res: Response, next: N
         );
     }
 
-    if (userExist.verifiedEmailCode && userExist.emailCodeExpiresAt && userExist.emailCodeExpiresAt > String(Date.now())) {
+    if (userExist.verifiedEmailCode && userExist.emailCodeExpiresAt && String(userExist.emailCodeExpiresAt) > String(Date.now())) {
         return next(
             appError({
                 statusCode: 400,
@@ -461,7 +461,7 @@ const forgetPassword = asyncWrapper(async (req: Request, res: Response, next: Ne
     if (
         user.resetToken &&
         user.resetTokenExpiresAt &&
-        user.resetTokenExpiresAt > String(Date.now())
+        String(user.resetTokenExpiresAt) > String(Date.now())
     ) {
         return res.status(200).json({
             message:
@@ -483,7 +483,7 @@ const forgetPassword = asyncWrapper(async (req: Request, res: Response, next: Ne
 
     // Save token & expiration
     user.resetToken = resetToken;
-    user.resetTokenExpiresAt = String(Date.now() + 5 * 60 * 1000);
+    user.resetTokenExpiresAt = new Date(Date.now() + 5 * 60 * 1000);
 
     await user.save();
 
@@ -632,20 +632,17 @@ const talkWithGoogle = asyncWrapper(async (req: Request, res: Response, next: Ne
         );
     }
 
-    let chosenRole = UserRole.FREELANCER; // fallback default
-    let typeOfSign = Sign.REGISTER
+    let chosenRole = UserRole.FREELANCER;
+    let typeOfSign = Sign.REGISTER;
     if (typeof state === "string") {
         try {
             const parsedState = JSON.parse(state);
             chosenRole = parsedState.role;
-            typeOfSign = parsedState.sign
+            typeOfSign = parsedState.sign;
         } catch (e) {
             console.error("Failed parsing OAuth state payload", e);
         }
     }
-
-    // Optional but recommended: compare `state` against the `oauth_state` cookie you set above
-    // if (state !== req.cookies.oauth_state) return next(new AppError("Invalid state", 400));
 
     // 1. Exchange the code for tokens
     const tokenResponse = await fetch("https://oauth2.googleapis.com/token", {
@@ -660,7 +657,8 @@ const talkWithGoogle = asyncWrapper(async (req: Request, res: Response, next: Ne
         }),
     });
 
-    const tokenData = await tokenResponse.json();
+    // Explicitly type the parsed JSON payload
+    const tokenData = (await tokenResponse.json()) as GoogleTokenResponse;
 
     if (!tokenResponse.ok) {
         return next(
@@ -672,7 +670,7 @@ const talkWithGoogle = asyncWrapper(async (req: Request, res: Response, next: Ne
         );
     }
 
-    // 2. Get the user's profile (simplest route: call the userinfo endpoint with the access_token)
+    // 2. Get user profile
     const profileResponse = await fetch("https://www.googleapis.com/oauth2/v3/userinfo", {
         headers: { Authorization: `Bearer ${tokenData.access_token}` },
     });
@@ -687,30 +685,20 @@ const talkWithGoogle = asyncWrapper(async (req: Request, res: Response, next: Ne
         );
     }
 
-    const profile = await profileResponse.json();
-    console.log(profile)
-    // profile: { sub, email, email_verified, name, picture, ... }
+    // Explicitly type the parsed JSON payload
+    const profile = (await profileResponse.json()) as GoogleUserProfile;
 
-    //     {
-    //   sub: '117571297835780515536',
-    //   name: 'Mohamed Gamal',
-    //   given_name: 'Mohamed',
-    //   family_name: 'Gamal',
-    //   picture: 'https://lh3.googleusercontent.com/a/ACg8ocIF_l9vpW-H8gS3xilWZHiDlaIMeq_a9Bq784wLMUgzwmUUw8XK=s96-c',
-    //   email: 'mohamedgamal0101875@gmail.com',
-    //   email_verified: true
-    // }
-    // 3. Find or create the user in your DB
+    // 3. Find or create the user in DB
     let user = await User.findOne({ email: profile.email });
 
     if (!user && typeOfSign == Sign.LOGIN) {
-        res.redirect(`${process.env.CLIENT_URL}/role`)
-        return
+        res.redirect(`${process.env.CLIENT_URL}/role`);
+        return;
     }
 
     if (user && typeOfSign == Sign.REGISTER) {
-        res.redirect(`${process.env.CLIENT_URL}/login`)
-        return
+        res.redirect(`${process.env.CLIENT_URL}/login`);
+        return;
     }
 
     if (!user) {
@@ -735,12 +723,12 @@ const talkWithGoogle = asyncWrapper(async (req: Request, res: Response, next: Ne
         });
 
         if (user.role == UserRole.FREELANCER) {
-            const profile: IProfileInput = { ...defaultProfile, user: user._id }
-            await Profile.create(profile)
+            const userProfile: IProfileInput = { ...defaultProfile, user: user._id };
+            await Profile.create(userProfile);
         }
     }
 
-    // 4. Issue your own session/JWT, same as your normal login flow
+    // 4. Issue session/JWT
     const token = jwt.sign({
         id: user._id,
         role: user.role,
@@ -756,13 +744,13 @@ const talkWithGoogle = asyncWrapper(async (req: Request, res: Response, next: Ne
         secure: true,
         sameSite: "lax"
     });
+
     if (user.isIdentityVerified) {
         res.redirect(`${process.env.CLIENT_URL}/`);
     } else {
         res.redirect(`${process.env.CLIENT_URL}/verify-identity`);
     }
-});
-
+})
 
 
 

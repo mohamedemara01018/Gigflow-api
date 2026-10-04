@@ -9,6 +9,26 @@ export enum Sign {
     LOGIN = "login",
 }
 
+export interface GoogleTokenResponse {
+    access_token: string;
+    expires_in: number;
+    token_type: string;
+    scope: string;
+    id_token?: string;
+    error?: string;
+    error_description?: string;
+}
+
+export interface GoogleUserProfile {
+    sub: string;
+    name: string;
+    given_name: string;
+    family_name: string;
+    picture: string;
+    email: string;
+    email_verified: boolean;
+}
+
 export enum UserStatus {
     ACTIVE = "active",
     INACTIVE = "inactive",
