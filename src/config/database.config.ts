@@ -1,11 +1,23 @@
-import mongoose from 'mongoose'
+import mongoose from "mongoose";
 
-export const connectDB = async () => {
+export const connectDB = async (): Promise<void> => {
     try {
-        await mongoose.connect(process.env.MONGO_URI || 'mongodb://127.0.0.1:27017/freelance-app');
-        console.log(`📈 database has connected successfully`);
-    } catch (error) {
-        console.log(`❌ there is error when connect to DB`);
-    }
+        const mongoUri = process.env.MONGO_URI;
 
-}
+        if (!mongoUri) {
+            throw new Error("MONGO_URI is not defined");
+        }
+
+        if (mongoose.connection.readyState === 1) {
+            console.log("📈 MongoDB is already connected");
+            return;
+        }
+
+        await mongoose.connect(mongoUri);
+
+        console.log("📈 Database connected successfully");
+    } catch (error) {
+        console.error("❌ Database connection failed:", error);
+        throw error;
+    }
+};
