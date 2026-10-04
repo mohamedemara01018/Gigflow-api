@@ -274,3 +274,22 @@ export enum PaymentMethod {
     US_BANK_ACCOUNT = "us_bank_account",
     PAYPAL = "paypal",
 }
+
+export enum ContactSupportCategory {
+    GENERAL_INQUIRY = "general_inquiry",
+    ACCOUNT = "account",
+    PAYMENT = "payment",
+    JOB = "job",
+    PROPOSAL = "proposal",
+    CONTRACT = "contract",
+    TECHNICAL = "technical",
+    SECURITY = "security",
+    OTHER = "other",
+}
+
+export enum ContactSupportStatus {
+    NEW = "new",
+    IN_PROGRESS = "in_progress",
+    RESOLVED = "resolved",
+    CLOSED = "closed",
+}

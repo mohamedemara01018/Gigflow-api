@@ -35,6 +35,7 @@ import messageRoutes from './features/message/message.routes'
 import contractRoutes from './features/contract/contract.routes';
 import milestoneRoutes from './features/milestone/milestone.routes'
 import paymentMethodRoutes from './features/payment-method/paymentMethod.route'
+import contactSupportRoutes from './features/contact-support/contactSupport.route'
 
 const app: Application = express();
 
@@ -130,6 +131,7 @@ app.use('/api/contract', contractRoutes);
 app.use('/api/milestone', milestoneRoutes);
 app.use('/api/payment-methods', paymentMethodRoutes);
 app.use('/api/stripe', paymentMethodRoutes);
+app.use('/api/contact-support', contactSupportRoutes);
 
 /* ===========================
     404 Handler
