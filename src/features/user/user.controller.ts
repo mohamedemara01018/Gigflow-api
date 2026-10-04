@@ -1,7 +1,7 @@
 import type { NextFunction, Request, Response } from "express";
 import { User } from "./user.model.js";
 import { appError } from "../../utils/appError.utils.js";
-import bcrypt from 'bcrypt';
+import bcrypt from 'bcryptjs';
 import jwt from 'jsonwebtoken';
 import asyncWrapper from "../../utils/asyncWrapper.utils.js";
 import { cloudinaryFolderPath, statusText } from "../../utils/enums.utils.js";
