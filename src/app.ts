@@ -70,7 +70,7 @@ const limiter = rateLimit({
     },
 });
 
-app.use("/api", limiter);
+// app.use("/api", limiter);
 
 /* =========================
    Body Parsers

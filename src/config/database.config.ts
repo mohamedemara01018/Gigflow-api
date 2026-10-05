@@ -2,8 +2,8 @@ import mongoose from "mongoose";
 
 export const connectDB = async (): Promise<void> => {
     try {
-        const mongoUri = process.env.MONGO_URI;
-
+        const mongoUri = process.env.MONGO_URI || 'mongodb://127.0.0.1:27017/freelance-app';
+        console.log('mongouri,', mongoUri)
         if (!mongoUri) {
             throw new Error("MONGO_URI is not defined");
         }
