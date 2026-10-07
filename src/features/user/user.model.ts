@@ -198,19 +198,10 @@ const userSchema = new Schema(
         |--------------------------------------------------------------------------
         | Stripe Customer
         |--------------------------------------------------------------------------
-        |
-        | Used by CLIENT users to:
-        |
-        | - Save payment methods
-        | - Create SetupIntents
-        | - Create PaymentIntents
-        | - Make payments
-        |
         */
 
         stripeCustomerId: {
             type: String,
-            default: null,
             unique: true,
             sparse: true,
             index: true,
@@ -220,14 +211,10 @@ const userSchema = new Schema(
         |--------------------------------------------------------------------------
         | Stripe Connect Account
         |--------------------------------------------------------------------------
-        |
-        | Used by FREELANCER users to receive payouts.
-        |
         */
 
         stripeConnectAccountId: {
             type: String,
-            default: null,
             unique: true,
             sparse: true,
             index: true,

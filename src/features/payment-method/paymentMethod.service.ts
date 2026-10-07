@@ -387,39 +387,84 @@ export const deletePaymentMethodService = async (userId: string, paymentMethodId
     return paymentMethod;
 };
 
-export const createV2ConnectAccount = async (user: any): Promise<string> => {
-    const response = await stripe.v2.core.accounts.create({
-        contact_email: user.email,
+export const createV2ConnectAccount = async (
+    user: any
+): Promise<string> => {
+    const response = await stripe.v2.core.accounts.create(
+        {
+            contact_email: user.email,
 
-        identity: {
-            country: "US",
-        },
-
-        dashboard: "express",
-
-        defaults: {
-            responsibilities: {
-                fees_collector: "stripe",
-                losses_collector: "stripe",
+            identity: {
+                country: "US",
+                entity_type: "individual",
             },
-        },
 
-        configuration: {
-            merchant: {
-                capabilities: {
-                    card_payments: {
-                        requested: true,
+            dashboard: "express",
+
+            defaults: {
+                responsibilities: {
+                    fees_collector: "stripe",
+                    losses_collector: "stripe",
+                },
+            },
+
+            configuration: {
+                merchant: {
+                    capabilities: {
+                        card_payments: {
+                            requested: true,
+                        },
                     },
                 },
             },
-        },
 
-        metadata: {
-            userId: user._id.toString(),
+            metadata: {
+                userId: user._id.toString(),
+            },
         },
-    });
+        {
+            apiVersion: "2026-09-30.preview",
+        }
+    );
+
+    console.log(
+        "✅ Stripe V2 Managed Risk account created:",
+        response.id
+    );
 
     return response.id;
+};
+/**
+ * Ensures a connected account has the recipient.capabilities.stripe_balance.stripe_transfers capability requested.
+ * Automatically updates accounts created earlier without this capability.
+ */
+export const ensureRecipientCapability = async (accountId: string): Promise<void> => {
+    try {
+        const account = await stripe.v2.core.accounts.retrieve(accountId, {
+            include: ["configuration.recipient"],
+        });
+
+        const transfersCapability =
+            account.configuration?.recipient?.capabilities?.stripe_balance?.stripe_transfers;
+
+        if (!transfersCapability || (transfersCapability.status !== "active" && transfersCapability.status !== "pending")) {
+            await stripe.v2.core.accounts.update(accountId, {
+                configuration: {
+                    recipient: {
+                        capabilities: {
+                            stripe_balance: {
+                                stripe_transfers: {
+                                    requested: true,
+                                },
+                            },
+                        },
+                    },
+                },
+            });
+        }
+    } catch (err) {
+        console.error(`[ensureRecipientCapability Warning for ${accountId}]:`, err);
+    }
 };
 
 export const createConnectOnboardingLinkService = async (userId: string) => {
@@ -447,9 +492,10 @@ export const createConnectOnboardingLinkService = async (userId: string) => {
         user.stripeConnectOnboardingComplete = false;
         await user.save();
     } else {
-        // Confirm account existence in Stripe
+        // Confirm account existence in Stripe and ensure recipient capability
         try {
             await stripe.v2.core.accounts.retrieve(user.stripeConnectAccountId);
+            await ensureRecipientCapability(user.stripeConnectAccountId);
         } catch (err: any) {
             if (err?.code === "resource_missing" || err?.statusCode === 404) {
                 const accountId = await createV2ConnectAccount(user);
@@ -521,8 +567,12 @@ export const getConnectAccountStatusService = async (userId: string) => {
 
         const account = response;
 
-        // V2 uses requirements.entries (empty = all requirements met)
-        const hasNoRequirements = !account.requirements?.entries?.length;
+        // Check if there are blocking currently_due or past_due requirements
+        const hasBlockingRequirements = (account.requirements?.entries || []).some(
+            (entry: any) =>
+                entry.impact?.restricts_capability?.deadline?.status === "currently_due" ||
+                entry.impact?.restricts_capability?.deadline?.status === "past_due"
+        );
 
         // Check recipient capabilities for transfers/payouts
         const recipientConfig = account.configuration?.recipient;
@@ -531,10 +581,18 @@ export const getConnectAccountStatusService = async (userId: string) => {
         const payoutsStatus =
             recipientConfig?.capabilities?.stripe_balance?.payouts?.status;
 
-        const detailsSubmitted = hasNoRequirements;
-        const payoutsEnabled = payoutsStatus === "active";
-        const chargesEnabled = transfersStatus === "active";
-        const onboardingComplete = Boolean(detailsSubmitted && (payoutsEnabled || chargesEnabled));
+        let v1PayoutsEnabled = false;
+        let v1DetailsSubmitted = false;
+        try {
+            const v1Acc = await stripe.accounts.retrieve(user.stripeConnectAccountId);
+            v1PayoutsEnabled = Boolean(v1Acc.payouts_enabled);
+            v1DetailsSubmitted = Boolean(v1Acc.details_submitted);
+        } catch { }
+
+        const detailsSubmitted = v1DetailsSubmitted || !hasBlockingRequirements;
+        const payoutsEnabled = payoutsStatus === "active" || v1PayoutsEnabled;
+        const chargesEnabled = transfersStatus === "active" || (transfersStatus === "pending" && !hasBlockingRequirements);
+        const onboardingComplete = Boolean(payoutsEnabled || (detailsSubmitted && chargesEnabled));
 
         if (user.stripeConnectOnboardingComplete !== onboardingComplete) {
             user.stripeConnectOnboardingComplete = onboardingComplete;
@@ -665,16 +723,28 @@ export const handleAccountUpdatedWebhook = async (account: Stripe.Account) => {
                 account.id,
                 { include: ["configuration.recipient", "requirements"] }
             );
-            const hasNoRequirements = !v2Account.requirements?.entries?.length;
+            const hasBlockingRequirements = (v2Account.requirements?.entries || []).some(
+                (entry: any) =>
+                    entry.impact?.restricts_capability?.deadline?.status === "currently_due" ||
+                    entry.impact?.restricts_capability?.deadline?.status === "past_due"
+            );
             const recipientConfig = v2Account.configuration?.recipient;
-            const transfersActive =
-                recipientConfig?.capabilities?.stripe_balance?.stripe_transfers?.status === "active";
-            const payoutsActive =
-                recipientConfig?.capabilities?.stripe_balance?.payouts?.status === "active";
-            isComplete = Boolean(hasNoRequirements && (transfersActive || payoutsActive));
+            const transfersStatus =
+                recipientConfig?.capabilities?.stripe_balance?.stripe_transfers?.status;
+            const payoutsStatus =
+                recipientConfig?.capabilities?.stripe_balance?.payouts?.status;
+            const transfersActive = transfersStatus === "active";
+            const payoutsActive = payoutsStatus === "active";
+
+            isComplete = Boolean(
+                payoutsActive ||
+                transfersActive ||
+                account.payouts_enabled ||
+                (account.details_submitted && !hasBlockingRequirements)
+            );
         } catch (v2Err) {
             // Fallback to v1 fields from webhook payload
-            isComplete = Boolean(account.details_submitted && account.payouts_enabled);
+            isComplete = Boolean(account.details_submitted && (account.payouts_enabled || account.charges_enabled));
         }
 
         user.stripeConnectOnboardingComplete = isComplete;

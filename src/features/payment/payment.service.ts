@@ -1,12 +1,12 @@
 import { StatusCodes } from "http-status-codes";
 import { stripe } from "../../config/stripe.js";
 import { appError } from "../../utils/appError.utils.js";
-import { ContractStatus, MilestoneStatus, statusText, UserRole } from "../../utils/enums.utils.js";
+import { ContractStatus, JobStatus, MilestoneStatus, ProposalStatus, statusText, UserRole } from "../../utils/enums.utils.js";
 import { Contract } from "../contract/contract.model.js";
 import { Milestone } from "../milestone/milestone.model.js";
 import { User } from "../user/user.model.js";
 import { PaymentMethodModel, IPaymentMethodDocument } from "../payment-method/paymentMethod.model.js";
-import { getOrCreateStripeCustomer } from "../payment-method/paymentMethod.service.js";
+import { getOrCreateStripeCustomer, ensureRecipientCapability, getConnectAccountStatusService } from "../payment-method/paymentMethod.service.js";
 import { Conversation } from "../conversation/conversation.model.js";
 import { getIO } from "../../socket.js";
 import Payment, { PaymentMethod, PaymentStatus, PaymentType } from "./payment.model.js";
@@ -22,6 +22,9 @@ import {
     notifyFreelancerOnMilestoneFundsReleased,
 } from "./payment.notification.js";
 import Stripe from "stripe";
+import { Job } from "../job/job.model.js";
+import { Proposal } from "../proposal/proposal.model.js";
+import { Profile } from "../profile/profile.model.js";
 
 // Default platform fee rate (10% if not configured in environment)
 const PLATFORM_FEE_RATE = Number(process.env.PLATFORM_FEE_PERCENTAGE) || 0.1;
@@ -954,8 +957,8 @@ export const releaseMilestoneFundsService = async (
             statusText: statusText.FAIL,
         });
     }
-
     const contract = milestone.contract as any;
+    console.log('contract', contract);
     if (!contract) {
         throw appError({
             statusCode: StatusCodes.NOT_FOUND,
@@ -1077,6 +1080,19 @@ export const releaseMilestoneFundsService = async (
         });
     }
 
+    // Auto-sync freelancer's Stripe Connect onboarding status if not yet marked complete
+    if (!freelancer.stripeConnectOnboardingComplete) {
+        try {
+            await getConnectAccountStatusService(freelancer._id.toString());
+            const updatedFreelancer = await User.findById(freelancer._id);
+            if (updatedFreelancer) {
+                freelancer.stripeConnectOnboardingComplete = updatedFreelancer.stripeConnectOnboardingComplete;
+            }
+        } catch (syncErr) {
+            console.warn("[Auto-sync Freelancer Connect Status Error]:", syncErr);
+        }
+    }
+
     const now = new Date();
 
     // 7. Idempotency Check: Has this payment already been released?
@@ -1087,6 +1103,9 @@ export const releaseMilestoneFundsService = async (
     });
 
     if (!payment.releasedAt || !transferId || !freelancerPayoutTx) {
+        // Ensure recipient capability is requested on freelancer's V2 account
+        await ensureRecipientCapability(freelancer.stripeConnectAccountId);
+
         // Execute Stripe Transfer to Freelancer Connected Account
         try {
             const transfer = await stripe.transfers.create(
@@ -1115,9 +1134,17 @@ export const releaseMilestoneFundsService = async (
             await payment.save();
         } catch (stripeErr: any) {
             console.error("[Stripe Transfer Error]:", stripeErr);
+            let errorMsg = stripeErr.message || "Failed to transfer funds to freelancer's Stripe Connect account";
+            if (
+                stripeErr?.message?.includes("capabilities enabled") ||
+                stripeErr?.message?.includes("stripe_transfers")
+            ) {
+                errorMsg =
+                    "Freelancer's Stripe Connect account does not have transfers enabled yet. The freelancer must complete Stripe Connect onboarding in Settings -> Payments to receive payout transfers.";
+            }
             throw appError({
                 statusCode: StatusCodes.BAD_REQUEST,
-                message: stripeErr.message || "Failed to transfer funds to freelancer's Stripe Connect account",
+                message: errorMsg,
                 statusText: statusText.FAIL,
             });
         }
@@ -1175,6 +1202,16 @@ export const releaseMilestoneFundsService = async (
     milestone.completedAt = milestone.completedAt || now;
     await milestone.save();
 
+
+    // const profile = await Profile.findById(freelancerUserId);
+    // console.log('profile', profile)
+    // if (profile) {
+    //     let totalEarnings = profile.totalEarnings;
+    //     profile.totalEarnings = totalEarnings + milestone.amount
+    //     await profile.save()
+    // }
+
+
     // 9. Automatically activate next PENDING milestone (if any)
     const nextMilestone = await Milestone.findOne({
         contract: contract._id,
@@ -1193,7 +1230,13 @@ export const releaseMilestoneFundsService = async (
         });
 
         if (remainingUnapproved === 0) {
+            const job = await Job.findById(contract.job.toString());
+            if (job) {
+                job.status = JobStatus.COMPLETED;
+                await job.save();
+            }
             contract.status = ContractStatus.COMPLETED;
+
             contract.completedAt = now;
             await contract.save();
         }
