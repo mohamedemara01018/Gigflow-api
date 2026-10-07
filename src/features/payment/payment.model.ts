@@ -66,6 +66,7 @@ const paymentSchema = new Schema(
         type: {
             type: String,
             enum: Object.values(PaymentType),
+            default: PaymentType.MILESTONE,
             required: true,
             index: true,
         },
@@ -131,23 +132,28 @@ const paymentSchema = new Schema(
 
         /*
         |--------------------------------------------------------------------------
-        | Stripe
+        | Stripe Identifiers (Nullable with partial unique indexes)
         |--------------------------------------------------------------------------
         */
 
         stripePaymentIntentId: {
             type: String,
             default: null,
-            unique: true,
-            sparse: true,
+            trim: true,
             index: true,
         },
 
         stripeChargeId: {
             type: String,
             default: null,
-            unique: true,
-            sparse: true,
+            trim: true,
+            index: true,
+        },
+
+        stripeTransferId: {
+            type: String,
+            default: null,
+            trim: true,
             index: true,
         },
 
@@ -178,13 +184,6 @@ const paymentSchema = new Schema(
         releasedAt: {
             type: Date,
             default: null,
-            index: true,
-        },
-
-        stripeTransferId: {
-            type: String,
-            default: null,
-            sparse: true,
             index: true,
         },
 
@@ -231,7 +230,52 @@ const paymentSchema = new Schema(
 
 /*
 |--------------------------------------------------------------------------
-| Indexes
+| Partial Unique Indexes (Prevents Null Collisions and Duplicates)
+|--------------------------------------------------------------------------
+*/
+
+// Guarantees maximum ONE Payment per Milestone
+paymentSchema.index(
+    { milestone: 1 },
+    {
+        unique: true,
+        partialFilterExpression: {
+            milestone: {
+                $type: "objectId",
+            },
+        },
+    }
+);
+
+// Allows multiple nulls, guarantees uniqueness when a String Stripe PaymentIntent ID exists
+paymentSchema.index(
+    { stripePaymentIntentId: 1 },
+    {
+        unique: true,
+        partialFilterExpression: {
+            stripePaymentIntentId: {
+                $type: "string",
+            },
+        },
+    }
+);
+
+// Allows multiple nulls, guarantees uniqueness when a String Stripe Charge ID exists
+paymentSchema.index(
+    { stripeChargeId: 1 },
+    {
+        unique: true,
+        partialFilterExpression: {
+            stripeChargeId: {
+                $type: "string",
+            },
+        },
+    }
+);
+
+/*
+|--------------------------------------------------------------------------
+| Query & Sorting Indexes
 |--------------------------------------------------------------------------
 */
 
@@ -251,11 +295,6 @@ paymentSchema.index({
 });
 
 paymentSchema.index({
-    milestone: 1,
-    createdAt: -1,
-});
-
-paymentSchema.index({
     status: 1,
     createdAt: -1,
 });
@@ -271,4 +310,43 @@ paymentSchema.index({
 });
 
 export const Payment = model("Payment", paymentSchema);
+
+/**
+ * Safely synchronizes payment indexes by dropping legacy indexes on startup.
+ */
+export const syncPaymentIndexes = async (): Promise<void> => {
+    try {
+        const collection = Payment.collection;
+        if (!collection) return;
+
+        const existingIndexes = await collection.indexes().catch(() => []);
+
+        for (const idx of existingIndexes) {
+            // Drop legacy unique index on stripeChargeId if not partial
+            if (idx.name === "stripeChargeId_1" && idx.unique && !idx.partialFilterExpression) {
+                console.log("🧹 Dropping legacy unique index: stripeChargeId_1");
+                await collection.dropIndex("stripeChargeId_1").catch(() => {});
+            }
+            // Drop legacy unique index on stripePaymentIntentId if not partial
+            if (idx.name === "stripePaymentIntentId_1" && idx.unique && !idx.partialFilterExpression) {
+                console.log("🧹 Dropping legacy unique index: stripePaymentIntentId_1");
+                await collection.dropIndex("stripePaymentIntentId_1").catch(() => {});
+            }
+            // Drop legacy milestone_1 index if not partial unique
+            if (idx.name === "milestone_1" && (!idx.unique || !idx.partialFilterExpression)) {
+                console.log("🧹 Dropping legacy milestone_1 index to apply partial unique index");
+                await collection.dropIndex("milestone_1").catch(() => {});
+            }
+        }
+
+        await Payment.syncIndexes();
+        console.log("✅ Payment indexes synchronized successfully.");
+    } catch (err) {
+        console.warn("⚠️ Error synchronizing payment indexes:", err);
+    }
+};
+
+// Trigger safe index migration upon module load
+syncPaymentIndexes();
+
 export default Payment;

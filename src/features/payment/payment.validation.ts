@@ -76,5 +76,29 @@ export const validateGetPaymentsQuery = [
         .optional()
         .isMongoId()
         .withMessage("Invalid milestone ID filter format"),
+    query("clientId")
+        .optional()
+        .isMongoId()
+        .withMessage("Invalid client ID filter format"),
+    query("freelancerId")
+        .optional()
+        .isMongoId()
+        .withMessage("Invalid freelancer ID filter format"),
+    query("status")
+        .optional()
+        .isString()
+        .trim(),
+    query("type")
+        .optional()
+        .isString()
+        .trim(),
+    query("startDate")
+        .optional()
+        .isISO8601()
+        .withMessage("startDate must be a valid ISO 8601 date string"),
+    query("endDate")
+        .optional()
+        .isISO8601()
+        .withMessage("endDate must be a valid ISO 8601 date string"),
     handleValidationErrors,
 ];

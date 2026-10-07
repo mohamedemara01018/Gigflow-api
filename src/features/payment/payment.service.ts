@@ -427,7 +427,7 @@ export const payMilestoneService = async (
                     },
                 },
                 {
-                    idempotencyKey: `payment-${payment._id.toString()}`,
+                    idempotencyKey: `payment-milestone-${milestone._id.toString()}`,
                 }
             );
         }
@@ -999,18 +999,10 @@ export const releaseMilestoneFundsService = async (
     }
 
     // 4. Find the PAID Payment record for this milestone (or auto-fund via saved payment method if not yet paid)
-    let payment: any = await (Payment as any).findOne({
+    let payment: any = await Payment.findOne({
         milestone: milestone._id,
-        status: { $in: [PaymentStatus.PAID, "paid", "completed"] },
+        status: PaymentStatus.PAID,
     });
-
-    if (!payment) {
-        // Also check if paid at contract level
-        payment = await (Payment as any).findOne({
-            contract: contract._id,
-            status: { $in: [PaymentStatus.PAID, "paid", "completed"] },
-        });
-    }
 
     if (!payment) {
         // Attempt to auto-fund milestone using the client's saved payment method
@@ -1022,9 +1014,9 @@ export const releaseMilestoneFundsService = async (
         if (clientPaymentMethod) {
             try {
                 await payMilestoneService(userId, milestone._id.toString(), clientPaymentMethod._id.toString());
-                payment = await (Payment as any).findOne({
+                payment = await Payment.findOne({
                     milestone: milestone._id,
-                    status: { $in: [PaymentStatus.PAID, "paid", "completed"] },
+                    status: PaymentStatus.PAID,
                 });
             } catch (autoPayErr: any) {
                 console.error("[Auto-fund Milestone Error]:", autoPayErr);
@@ -1040,7 +1032,7 @@ export const releaseMilestoneFundsService = async (
     if (!payment) {
         throw appError({
             statusCode: StatusCodes.BAD_REQUEST,
-            message: "Milestone cannot be approved and released because no completed payment was found. Please add a payment method in Settings -> Payment Methods to fund this milestone.",
+            message: "Milestone cannot be approved and released because no completed payment was found for this milestone. Client must pay/fund this milestone first.",
             statusText: statusText.FAIL,
         });
     }
