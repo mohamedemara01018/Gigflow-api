@@ -22,24 +22,41 @@ router.post(
 router.get("/contract/:contractId", milestoneController.getContractMilestones);
 
 // Flow Transitions
-// PATCH /api/milestone/:id/submit - Freelancer submits milestone deliverables
-// PATCH /api/milestone/:id/approve - Client approves milestone
-// PATCH /api/milestone/:id/reject  - Client requests revisions on submitted work
-router.patch(
-    "/:id/submit",
-    authorizationMiddleware([UserRole.FREELANCER]),
-    milestoneController.submitMilestone
-);
-router.patch(
-    "/:id/approve",
-    authorizationMiddleware([UserRole.CLIENT]),
-    milestoneController.approveMilestone
-);
-router.patch(
-    "/:id/reject",
-    authorizationMiddleware([UserRole.CLIENT]),
-    milestoneController.rejectMilestone
-);
+// POST & PATCH /api/milestone/:id/submit - Freelancer submits milestone deliverables
+// POST & PATCH /api/milestone/:id/approve - Client approves milestone and releases funds
+// POST & PATCH /api/milestone/:id/reject  - Client requests revisions on submitted work
+router
+    .route("/:id/submit")
+    .post(
+        authorizationMiddleware([UserRole.FREELANCER]),
+        milestoneController.submitMilestone
+    )
+    .patch(
+        authorizationMiddleware([UserRole.FREELANCER]),
+        milestoneController.submitMilestone
+    );
+
+router
+    .route("/:id/approve")
+    .post(
+        authorizationMiddleware([UserRole.CLIENT]),
+        milestoneController.approveMilestone
+    )
+    .patch(
+        authorizationMiddleware([UserRole.CLIENT]),
+        milestoneController.approveMilestone
+    );
+
+router
+    .route("/:id/reject")
+    .post(
+        authorizationMiddleware([UserRole.CLIENT]),
+        milestoneController.rejectMilestone
+    )
+    .patch(
+        authorizationMiddleware([UserRole.CLIENT]),
+        milestoneController.rejectMilestone
+    );
 
 // GET    /api/milestone/:id - Get milestone by ID
 // PATCH  /api/milestone/:id - Edit milestone details (Client only)

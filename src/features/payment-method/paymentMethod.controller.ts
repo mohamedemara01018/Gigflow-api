@@ -17,6 +17,10 @@ import {
     handleSetupIntentSucceededWebhook,
     handleAccountUpdatedWebhook,
 } from "./paymentMethod.service.js";
+import {
+    fulfillSuccessfulPaymentService,
+    handlePaymentFailedService,
+} from "../payment/payment.service.js";
 import Stripe from "stripe";
 
 // ==========================================
@@ -338,6 +342,25 @@ export const handleStripeWebhook = async (
             case "setup_intent.succeeded": {
                 const setupIntent = event.data.object as Stripe.SetupIntent;
                 await handleSetupIntentSucceededWebhook(setupIntent);
+                break;
+            }
+            case "payment_intent.succeeded": {
+                const paymentIntent = event.data.object as Stripe.PaymentIntent;
+                const chargeId =
+                    typeof paymentIntent.latest_charge === "string"
+                        ? paymentIntent.latest_charge
+                        : (paymentIntent.latest_charge as any)?.id;
+                await fulfillSuccessfulPaymentService(
+                    paymentIntent.metadata?.paymentId || paymentIntent.id,
+                    paymentIntent.id,
+                    chargeId
+                );
+                break;
+            }
+            case "payment_intent.payment_failed": {
+                const paymentIntent = event.data.object as Stripe.PaymentIntent;
+                const reason = paymentIntent.last_payment_error?.message || "Payment declined";
+                await handlePaymentFailedService(paymentIntent.id, reason);
                 break;
             }
             case "account.updated": {

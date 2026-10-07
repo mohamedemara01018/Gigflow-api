@@ -255,4 +255,5 @@ transactionSchema.index({
     createdAt: -1,
 });
 
-export default model("Transaction", transactionSchema);
+export const Transaction = model("Transaction", transactionSchema);
+export default Transaction;

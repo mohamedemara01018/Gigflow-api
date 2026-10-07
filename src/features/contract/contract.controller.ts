@@ -613,3 +613,23 @@ export const deleteContract = asyncWrapper(
         });
     }
 );
+
+// ==========================================
+// 8. ACCEPT CONTRACT EXPLICIT ENDPOINT (Freelancer Only)
+// ==========================================
+export const acceptContract = asyncWrapper(
+    async (req: Request, res: Response, next: NextFunction) => {
+        req.body = { ...req.body, action: "accept" };
+        return respondToContract(req, res, next);
+    }
+);
+
+// ==========================================
+// 9. REJECT CONTRACT EXPLICIT ENDPOINT (Freelancer Only)
+// ==========================================
+export const rejectContract = asyncWrapper(
+    async (req: Request, res: Response, next: NextFunction) => {
+        req.body = { ...req.body, action: "reject" };
+        return respondToContract(req, res, next);
+    }
+);

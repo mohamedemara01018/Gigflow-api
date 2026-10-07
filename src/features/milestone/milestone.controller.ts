@@ -13,6 +13,7 @@ import {
     notifyFreelancerOnMilestoneApproved,
     notifyFreelancerOnMilestoneRejected,
 } from "../contract/contract.notification.js";
+import { releaseMilestoneFundsService } from "../payment/payment.service.js";
 
 // ==========================================
 // 1. GET ALL MILESTONES FOR A CONTRACT
@@ -270,99 +271,41 @@ export const submitMilestone = asyncWrapper(
 );
 
 // ==========================================
-// 5. APPROVE MILESTONE (Client approves)
+// 5. APPROVE MILESTONE (Client approves & releases funds)
 // ==========================================
 export const approveMilestone = asyncWrapper(
     async (req: Request, res: Response, next: NextFunction) => {
         const { id } = req.params;
-        const currentUserId = req.currentUser?._id;
+        const currentUserId = req.currentUser?._id?.toString();
+        const currentUserRole = req.currentUser?.role;
 
-        const milestone = await Milestone.findById(id).populate("contract");
-
-        if (!milestone) {
+        if (!currentUserId) {
             return next(
                 appError({
-                    statusCode: StatusCodes.NOT_FOUND,
-                    message: "Milestone not found",
+                    statusCode: StatusCodes.UNAUTHORIZED,
+                    message: "Unauthorized access",
                     statusText: statusText.FAIL,
                 })
             );
         }
 
-        const contract = milestone.contract as any;
-        if (contract?.client?.toString() !== currentUserId?.toString()) {
+        if (currentUserRole !== UserRole.CLIENT) {
             return next(
                 appError({
                     statusCode: StatusCodes.FORBIDDEN,
-                    message: "Only the client can approve this milestone",
+                    message: "Only the client can approve this milestone and release funds",
                     statusText: statusText.FAIL,
                 })
             );
         }
 
-        if (milestone.status !== MilestoneStatus.SUBMITTED) {
-            return next(
-                appError({
-                    statusCode: StatusCodes.BAD_REQUEST,
-                    message: `Cannot approve milestone in '${milestone.status}' status. Milestone must be SUBMITTED first.`,
-                    statusText: statusText.FAIL,
-                })
-            );
-        }
-
-        const now = new Date();
-        milestone.status = MilestoneStatus.APPROVED;
-        milestone.approvedAt = now;
-        milestone.completedAt = now;
-        await milestone.save();
-
-        // Automatically activate the next PENDING milestone (if any)
-        const nextMilestone = await Milestone.findOne({
-            contract: milestone.contract,
-            order: { $gt: milestone.order },
-            status: MilestoneStatus.PENDING,
-        }).sort({ order: 1 });
-
-        if (nextMilestone) {
-            nextMilestone.status = MilestoneStatus.IN_PROGRESS;
-            await nextMilestone.save();
-        } else {
-            // Check if all milestones are approved to auto-complete the Contract
-            const remainingMilestones = await Milestone.countDocuments({
-                contract: milestone.contract,
-                status: { $ne: MilestoneStatus.APPROVED },
-            });
-
-            if (remainingMilestones === 0) {
-                await Contract.findByIdAndUpdate(milestone.contract, {
-                    status: ContractStatus.COMPLETED,
-                    completedAt: now,
-                });
-            }
-        }
-
-        try {
-            const conversation = await Conversation.findOne({ contract: contract._id });
-            if (conversation) {
-                getIO().to(`conversation:${conversation._id}`).emit("milestone:updated", milestone);
-                if (nextMilestone) {
-                    getIO().to(`conversation:${conversation._id}`).emit("milestone:updated", nextMilestone);
-                }
-            }
-        } catch (socketError) {
-            console.error("Socket emission failed:", socketError);
-        }
-
-        // Notify freelancer
-        await notifyFreelancerOnMilestoneApproved(milestone, contract);
+        const result = await releaseMilestoneFundsService(currentUserId, String(id));
 
         res.status(StatusCodes.OK).json({
             status: statusText.SUCCESS,
-            message: "Milestone approved successfully",
-            data: {
-                milestone,
-                nextMilestoneActivated: nextMilestone ? nextMilestone._id : null,
-            },
+            success: true,
+            message: "Milestone approved and funds released successfully to freelancer's Stripe account",
+            data: result,
         });
     }
 );

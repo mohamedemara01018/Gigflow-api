@@ -29,6 +29,20 @@ router
         contractController.sendContract
     );
 
+// POST /api/contract/:id/accept - Explicitly accept a contract (Freelancer only)
+router.post(
+    "/:id/accept",
+    authorizationMiddleware([UserRole.FREELANCER]),
+    contractController.acceptContract
+);
+
+// POST /api/contract/:id/reject - Explicitly reject a contract (Freelancer only)
+router.post(
+    "/:id/reject",
+    authorizationMiddleware([UserRole.FREELANCER]),
+    contractController.rejectContract
+);
+
 // PATCH /api/contract/:id/respond - Accept or reject a contract offer (Freelancer)
 router
     .route("/:id/respond")

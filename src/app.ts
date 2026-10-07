@@ -36,6 +36,8 @@ import messageRoutes from "./features/message/message.routes.js";
 import contractRoutes from "./features/contract/contract.routes.js";
 import milestoneRoutes from "./features/milestone/milestone.routes.js";
 import paymentMethodRoutes from "./features/payment-method/paymentMethod.route.js";
+import paymentRoutes from "./features/payment/payment.route.js";
+import transactionRoutes from "./features/transaction/transaction.route.js";
 import contactSupportRoutes from "./features/contact-support/contactSupport.route.js";
 
 const app: Application = express();
@@ -146,8 +148,14 @@ app.use("/api/client-stats", clientStatsRoutes);
 app.use("/api/conversation", conversationRoutes);
 app.use("/api/message", messageRoutes);
 app.use("/api/contract", contractRoutes);
+app.use("/api/contracts", contractRoutes);
 app.use("/api/milestone", milestoneRoutes);
+app.use("/api/milestones", milestoneRoutes);
 app.use("/api/payment-methods", paymentMethodRoutes);
+app.use("/api/payments", paymentRoutes);
+app.use("/api/payment", paymentRoutes);
+app.use("/api/transactions", transactionRoutes);
+app.use("/api/transaction", transactionRoutes);
 app.use("/api/stripe", paymentMethodRoutes);
 app.use("/api/contact-support", contactSupportRoutes);
 

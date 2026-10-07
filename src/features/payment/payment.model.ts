@@ -175,6 +175,19 @@ const paymentSchema = new Schema(
             default: null,
         },
 
+        releasedAt: {
+            type: Date,
+            default: null,
+            index: true,
+        },
+
+        stripeTransferId: {
+            type: String,
+            default: null,
+            sparse: true,
+            index: true,
+        },
+
         failedAt: {
             type: Date,
             default: null,
@@ -257,4 +270,5 @@ paymentSchema.index({
     createdAt: -1,
 });
 
-export default model("Payment", paymentSchema);
+export const Payment = model("Payment", paymentSchema);
+export default Payment;
