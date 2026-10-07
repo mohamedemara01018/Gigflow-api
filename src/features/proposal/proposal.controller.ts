@@ -288,6 +288,14 @@ export const updateProposalStatus = asyncWrapper(
                 })
             );
         }
+        if (status === ProposalStatus.ACCEPTED) {
+            await Job.findByIdAndUpdate(
+                updatedProposal.job._id,
+                { $inc: { interviewCount: 1 } },
+                { new: true, runValidators: true }
+            )
+        }
+
 
         // DISPATCH NOTIFICATION TO FREELANCER
         await notifyFreelancerOnStatusUpdate(updatedProposal, (req as any).user?._id);

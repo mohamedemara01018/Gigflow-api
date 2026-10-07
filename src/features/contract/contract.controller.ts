@@ -13,6 +13,7 @@ import {
     notifyClientOnContractAccepted,
     notifyClientOnContractRejected,
 } from "./contract.notification.js";
+import { Job } from "../job/job.model.js";
 
 // ==========================================
 // 1. GET ALL CONTRACTS (With Filters & Pagination)
@@ -219,6 +220,13 @@ export const createContract = asyncWrapper(
             { path: "proposal" },
         ]);
 
+        if (jobDoc) {
+            await Job.findByIdAndUpdate(
+                jobDoc._id,
+                { $inc: { hiresCount: 1 } },
+                { new: true, runValidators: true }
+            )
+        }
         // 9. Real-time Socket.IO emission
         try {
             if (conversation) {

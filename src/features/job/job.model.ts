@@ -94,6 +94,12 @@ const jobSchema = new Schema(
             default: 0,
         },
 
+        interviewCount: {
+            type: Number,
+            default: 0,
+        },
+
+
         maxProposals: {
             type: Number,
             default: null,
