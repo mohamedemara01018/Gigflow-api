@@ -39,6 +39,7 @@ import paymentMethodRoutes from "./features/payment-method/paymentMethod.route.j
 import paymentRoutes from "./features/payment/payment.route.js";
 import transactionRoutes from "./features/transaction/transaction.route.js";
 import contactSupportRoutes from "./features/contact-support/contactSupport.route.js";
+import reviewRoutes from "./features/review/review.routes.js";
 
 const app: Application = express();
 
@@ -158,6 +159,8 @@ app.use("/api/transactions", transactionRoutes);
 app.use("/api/transaction", transactionRoutes);
 app.use("/api/stripe", paymentMethodRoutes);
 app.use("/api/contact-support", contactSupportRoutes);
+app.use("/api/reviews", reviewRoutes);
+app.use("/api/review", reviewRoutes);
 
 /* =========================
    404 Handler

@@ -25,6 +25,7 @@ import Stripe from "stripe";
 import { Job } from "../job/job.model.js";
 import { Proposal } from "../proposal/proposal.model.js";
 import { Profile } from "../profile/profile.model.js";
+import { ClientStats } from "../clientStats/clientStats.model.js";
 
 // Default platform fee rate (10% if not configured in environment)
 const PLATFORM_FEE_RATE = Number(process.env.PLATFORM_FEE_PERCENTAGE) || 0.1;
@@ -1194,6 +1195,20 @@ export const releaseMilestoneFundsService = async (
                 });
             }
         }
+
+        // Atomically and idempotently increment Client totalSpent
+        await ClientStats.findOneAndUpdate(
+            { client: contract.client },
+            { $inc: { totalSpent: payment.amount } },
+            { upsert: true }
+        );
+
+        // Atomically and idempotently increment Freelancer Profile totalEarnings
+        await Profile.findOneAndUpdate(
+            { user: contract.freelancer },
+            { $inc: { totalEarnings: payment.freelancerAmount } },
+            { upsert: true }
+        );
     }
 
     // 8. Update Milestone Status to APPROVED
@@ -1201,16 +1216,6 @@ export const releaseMilestoneFundsService = async (
     milestone.approvedAt = milestone.approvedAt || now;
     milestone.completedAt = milestone.completedAt || now;
     await milestone.save();
-
-
-    // const profile = await Profile.findById(freelancerUserId);
-    // console.log('profile', profile)
-    // if (profile) {
-    //     let totalEarnings = profile.totalEarnings;
-    //     profile.totalEarnings = totalEarnings + milestone.amount
-    //     await profile.save()
-    // }
-
 
     // 9. Automatically activate next PENDING milestone (if any)
     const nextMilestone = await Milestone.findOne({
@@ -1236,9 +1241,15 @@ export const releaseMilestoneFundsService = async (
                 await job.save();
             }
             contract.status = ContractStatus.COMPLETED;
-
             contract.completedAt = now;
             await contract.save();
+
+            // Increment freelancer completedJobs on Profile
+            await Profile.findOneAndUpdate(
+                { user: contract.freelancer },
+                { $inc: { completedJobs: 1 } },
+                { upsert: true }
+            );
         }
     }
 

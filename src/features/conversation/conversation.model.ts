@@ -36,6 +36,16 @@ const conversationSchema = new Schema(
         },
 
         /**
+         * Proposal related to this conversation.
+         */
+        proposal: {
+            type: Types.ObjectId,
+            ref: "Proposal",
+            default: null,
+            index: true,
+        },
+
+        /**
          * Contract related to this conversation.
          * Null before a contract is created.
          */
@@ -66,6 +76,21 @@ const conversationSchema = new Schema(
             type: String,
             enum: Object.values(ConversationStatus),
             default: ConversationStatus.ACTIVE,
+            index: true,
+        },
+
+        /**
+         * Soft deletion markers per participant.
+         */
+        freelancerDeletedAt: {
+            type: Date,
+            default: null,
+            index: true,
+        },
+
+        clientDeletedAt: {
+            type: Date,
+            default: null,
             index: true,
         },
 
@@ -130,17 +155,18 @@ const conversationSchema = new Schema(
 );
 
 /**
- * Prevent duplicate conversations for the same
- * client, freelancer, and job.
+ * Unique conversation per (client, freelancer, proposal) tuple.
+ * Allows multiple proposals between the same client & freelancer to have distinct conversations.
  */
 conversationSchema.index(
     {
         client: 1,
         freelancer: 1,
-        job: 1,
+        proposal: 1,
     },
     {
         unique: true,
+        sparse: true,
     }
 );
 
@@ -165,6 +191,13 @@ conversationSchema.index({
 });
 
 /**
+ * Find conversations related to a proposal.
+ */
+conversationSchema.index({
+    proposal: 1,
+});
+
+/**
  * Find conversations related to a contract.
  */
 conversationSchema.index({
@@ -172,3 +205,8 @@ conversationSchema.index({
 });
 
 export const Conversation = model("Conversation", conversationSchema);
+
+// Drop obsolete legacy index if present
+Conversation.collection.dropIndex("client_1_freelancer_1_job_1").catch(() => {
+    // Silently ignore if index does not exist
+});

@@ -77,10 +77,21 @@ export const getContractById = asyncWrapper(
         const { id } = req.params;
 
         const contract = await Contract.findById(id)
-            .populate("client", "firstName lastName avatar email")
-            .populate("freelancer", "firstName lastName avatar email")
-            .populate("job", "title description type budget status")
-            .populate("proposal");
+            .populate("client", "firstName lastName avatar email country city")
+            .populate("freelancer", "firstName lastName avatar email country city")
+            .populate({
+                path: "job",
+                populate: [
+                    { path: "client", select: "firstName lastName avatar email" },
+                    { path: "category", select: "name" },
+                ],
+            })
+            .populate({
+                path: "proposal",
+                populate: [
+                    { path: "freelancer", select: "firstName lastName avatar email" },
+                ],
+            });
 
         if (!contract) {
             return next(
@@ -202,12 +213,19 @@ export const createContract = asyncWrapper(
             startDate: startDate ? new Date(startDate) : null,
             endDate: endDate ? new Date(endDate) : null,
             status: ContractStatus.DRAFT,
+            sentToFreelancer: false,
             clientAcceptedAt: new Date(),
         });
 
-        // 7. Associate Contract with corresponding Conversation
+        // 7. Associate Contract with corresponding Proposal Conversation (DO NOT create a new conversation)
         const conversation = await Conversation.findOneAndUpdate(
-            { client: currentUserId, freelancer: proposalDoc.freelancer, job: jobDoc._id },
+            {
+                $or: [
+                    { proposal: proposalDoc._id },
+                    { client: currentUserId, freelancer: proposalDoc.freelancer, proposal: proposalDoc._id },
+                    { client: currentUserId, freelancer: proposalDoc.freelancer, job: jobDoc._id },
+                ],
+            },
             { contract: newContract._id },
             { new: true }
         );
@@ -225,8 +243,9 @@ export const createContract = asyncWrapper(
                 jobDoc._id,
                 { $inc: { hiresCount: 1 } },
                 { new: true, runValidators: true }
-            )
+            );
         }
+
         // 9. Real-time Socket.IO emission
         try {
             if (conversation) {
@@ -271,7 +290,8 @@ export const sendContract = asyncWrapper(
         }
 
         // Verify Client ownership
-        if (contract.client?._id ? contract.client._id.toString() !== currentUserId?.toString() : contract.client.toString() !== currentUserId?.toString()) {
+        const clientId = contract.client?._id ? contract.client._id.toString() : contract.client.toString();
+        if (clientId !== currentUserId?.toString()) {
             return next(
                 appError({
                     statusCode: StatusCodes.FORBIDDEN,
@@ -291,16 +311,52 @@ export const sendContract = asyncWrapper(
             );
         }
 
-        // Send notification to Freelancer
+        // Check if contract has already been sent
+        if ((contract as any).sentToFreelancer) {
+            return next(
+                appError({
+                    statusCode: StatusCodes.BAD_REQUEST,
+                    message: "Contract has already been sent to the freelancer",
+                    statusText: statusText.FAIL,
+                })
+            );
+        }
+
+        // Enforce backend validation: Contract MUST have at least 1 milestone before sending
+        const milestonesCount = await Milestone.countDocuments({ contract: contract._id });
+        if (milestonesCount === 0) {
+            return next(
+                appError({
+                    statusCode: StatusCodes.BAD_REQUEST,
+                    message: "Cannot send contract to freelancer without at least one milestone.",
+                    statusText: statusText.FAIL,
+                })
+            );
+        }
+
+        // Transition contract: mark as sent
+        (contract as any).sentToFreelancer = true;
+        (contract as any).sentAt = new Date();
+        await contract.save();
+
+        // Send notification to Freelancer (NO message created)
         await notifyFreelancerOnContractOffer(contract);
 
-        // Emit socket event to conversation room
+        // Emit socket event to conversation room and freelancer room
         try {
-            const conversation = await Conversation.findOne({ contract: contract._id });
+            const conversation = await Conversation.findOne({
+                $or: [{ contract: contract._id }, { proposal: contract.proposal }],
+            });
             if (conversation) {
                 getIO().to(`conversation:${conversation._id}`).emit("contract:sent", contract);
                 getIO().to(`conversation:${conversation._id}`).emit("contract:updated", contract);
             }
+            const freelancerId =
+                contract.freelancer && (contract.freelancer as any)._id
+                    ? (contract.freelancer as any)._id
+                    : contract.freelancer;
+            getIO().to(`user:${freelancerId}`).emit("contract:sent", contract);
+            getIO().to(`user:${freelancerId}`).emit("contract:updated", contract);
         } catch (socketError) {
             console.error("Socket emission failed:", socketError);
         }

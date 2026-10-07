@@ -77,6 +77,17 @@ const contractSchema = new Schema(
             index: true,
         },
 
+        sentToFreelancer: {
+            type: Boolean,
+            default: false,
+            index: true,
+        },
+
+        sentAt: {
+            type: Date,
+            default: null,
+        },
+
         clientAcceptedAt: {
             type: Date,
             default: null,
