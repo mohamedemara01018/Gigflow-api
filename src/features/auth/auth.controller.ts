@@ -118,8 +118,10 @@ const registerNewUser = asyncWrapper(async (req: Request, res: Response, next: N
 
     res.cookie("token", token, {
         httpOnly: true,
-        secure: false, // true in production (https)
-        maxAge: 1000 * 60 * 60, // 1 hour
+        secure: process.env.NODE_ENV === "production",
+        sameSite: process.env.NODE_ENV === "production" ? "none" : "lax",
+        path: "/",
+        maxAge: 1000 * 60 * 60,
     });
 
 
@@ -229,8 +231,10 @@ const verifyEmail = asyncWrapper(async (req: Request, res: Response, next: NextF
 
         res.cookie("token", token, {
             httpOnly: true,
-            secure: false, // true in production (https)
-            maxAge: 1000 * 60 * 60, // 1 hour
+            secure: process.env.NODE_ENV === "production",
+            sameSite: process.env.NODE_ENV === "production" ? "none" : "lax",
+            path: "/",
+            maxAge: 1000 * 60 * 60,
         });
 
         res.status(200).json({ message: 'user verifed successfully', data: { updatedUser } })
@@ -399,8 +403,10 @@ const login = asyncWrapper(async (req: Request, res: Response, next: NextFunctio
 
     res.cookie("token", token, {
         httpOnly: true,
-        secure: false, // true in production (https)
-        maxAge: 1000 * 60 * 60, // 1 hour
+        secure: process.env.NODE_ENV === "production",
+        sameSite: process.env.NODE_ENV === "production" ? "none" : "lax",
+        path: "/",
+        maxAge: 1000 * 60 * 60,
     });
 
     if (!token) {
@@ -741,8 +747,10 @@ const talkWithGoogle = asyncWrapper(async (req: Request, res: Response, next: Ne
 
     res.cookie("token", token, {
         httpOnly: true,
-        secure: true,
-        sameSite: "lax"
+        secure: process.env.NODE_ENV === "production",
+        sameSite: process.env.NODE_ENV === "production" ? "none" : "lax",
+        path: "/",
+        maxAge: 1000 * 60 * 60,
     });
 
     if (user.isIdentityVerified) {
