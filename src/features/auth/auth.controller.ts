@@ -767,14 +767,12 @@ const talkWithGoogle = asyncWrapper(async (req: Request, res: Response, next: Ne
         secure: process.env.NODE_ENV === "production",
         sameSite: process.env.NODE_ENV === "production" ? "none" : "lax",
         path: "/",
-        maxAge: 1000 * 60 * 60,
+        maxAge: 1000 * 60 * 60 * 24 * 7,
     });
 
-    if (user.isIdentityVerified) {
-        res.redirect(`${process.env.CLIENT_URL}/`);
-    } else {
-        res.redirect(`${process.env.CLIENT_URL}/verify-identity`);
-    }
+    const clientUrl = (process.env.CLIENT_URL || "http://localhost:3000").replace(/\/$/, "");
+    const destination = `${clientUrl}/api/auth/google/callback?token=${encodeURIComponent(token)}&isIdentityVerified=${user.isIdentityVerified}`;
+    res.redirect(destination);
 })
 
 
