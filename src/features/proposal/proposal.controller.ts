@@ -16,13 +16,18 @@ import {
 // ==========================================
 export const getAllProposals = asyncWrapper(
     async (req: Request, res: Response, next: NextFunction) => {
-        const { job, freelancer, status, page = 1, limit = 10 } = req.query;
+        const { job, freelancer, client, status, page = 1, limit = 10 } = req.query;
 
         const filter: Record<string, any> = {};
 
         if (job) filter.job = job;
         if (freelancer) filter.freelancer = freelancer;
         if (status) filter.status = status;
+
+        if (client) {
+            const clientJobs = await Job.distinct("_id", { client: client as any });
+            filter.job = { $in: clientJobs };
+        }
 
         const pageNum = Math.max(1, Number(page));
         const limitNum = Math.max(1, Number(limit));
