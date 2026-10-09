@@ -1,29 +1,15 @@
 import dotenv from "dotenv";
 dotenv.config();
 
-import type { Request, Response } from "express";
-
+import { createServer } from "node:http";
 import app from "./app.js";
 import { connectDB } from "./config/database.config.js";
+import { initializeSocket } from "./socket.js";
 
-const handler = async (
-    req: Request,
-    res: Response
-): Promise<void> => {
-    try {
-        await connectDB();
+await connectDB();
 
-        app(req, res);
-    } catch (error) {
-        console.error("❌ API Error:", error);
+const server = createServer(app);
 
-        if (!res.headersSent) {
-            res.status(500).json({
-                success: false,
-                message: "Internal Server Error",
-            });
-        }
-    }
-};
+initializeSocket(server);
 
-export default handler;
+export default server;
