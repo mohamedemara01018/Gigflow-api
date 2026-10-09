@@ -5,9 +5,11 @@ import { Review } from "./review.model.js";
 import { Contract } from "../contract/contract.model.js";
 import { Profile } from "../profile/profile.model.js";
 import { ClientStats } from "../clientStats/clientStats.model.js";
+import { Notification } from "../notification/notification.model.js";
 import { appError } from "../../utils/appError.utils.js";
 import asyncWrapper from "../../utils/asyncWrapper.utils.js";
-import { ContractStatus, statusText, UserRole } from "../../utils/enums.utils.js";
+import { ContractStatus, NotificationEntityType, NotificationType, statusText, UserRole } from "../../utils/enums.utils.js";
+import { getIO } from "../../socket.js";
 
 // ==========================================
 // 1. SUBMIT REVIEW FOR COMPLETED CONTRACT
@@ -172,6 +174,27 @@ export const createReview = asyncWrapper(
             { path: "reviewer", select: "firstName lastName avatar email role" },
             { path: "reviewee", select: "firstName lastName avatar email role" },
         ]);
+
+        // Send Review Notification to the Reviewee
+        try {
+            const reviewerRole = isReviewingFreelancer ? "The client" : "The freelancer";
+            const notificationTitle = "You received a new review";
+            const notificationMessage = `${reviewerRole} left you a ${newReview.rating}-star review for the contract "${contract.title}".`;
+            const notification = await Notification.create({
+                recipient: reviewee,
+                sender: reviewer,
+                type: NotificationType.REVIEW_RECEIVED,
+                title: notificationTitle,
+                message: notificationMessage,
+                entityType: NotificationEntityType.CONTRACT,
+                entityId: contract._id,
+                link: `/contracts/${contract._id}`,
+            });
+
+            getIO().to(`user:${reviewee.toString()}`).emit(NotificationType.REVIEW_RECEIVED, notification);
+        } catch (notifErr) {
+            console.error("[Review Notification Error]:", notifErr);
+        }
 
         res.status(StatusCodes.CREATED).json({
             status: statusText.SUCCESS,

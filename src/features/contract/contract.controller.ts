@@ -40,6 +40,20 @@ export const getAllContracts = asyncWrapper(
         if (status) filter.status = status;
         if (type) filter.type = type;
 
+        // Auto-scope by currentUser if not explicitly filtered
+        const currentUserId = req.currentUser?._id;
+        const currentUserRole = req.currentUser?.role;
+
+        if (currentUserId && !client && !freelancer) {
+            if (currentUserRole === UserRole.CLIENT || (currentUserRole as string) === "client") {
+                filter.client = currentUserId;
+            } else if (currentUserRole === UserRole.FREELANCER || (currentUserRole as string) === "freelancer") {
+                filter.freelancer = currentUserId;
+            } else if (currentUserRole !== UserRole.ADMIN && (currentUserRole as string) !== "admin") {
+                filter.$or = [{ client: currentUserId }, { freelancer: currentUserId }];
+            }
+        }
+
         const pageNum = Math.max(1, Number(page));
         const limitNum = Math.max(1, Number(limit));
         const skip = (pageNum - 1) * limitNum;
@@ -103,11 +117,35 @@ export const getContractById = asyncWrapper(
             );
         }
 
+        const currentUserId = req.currentUser?._id?.toString();
+        const currentUserRole = req.currentUser?.role;
+        const clientId = contract.client?._id ? contract.client._id.toString() : contract.client?.toString();
+        const freelancerId = contract.freelancer?._id ? contract.freelancer._id.toString() : contract.freelancer?.toString();
+        const isAdmin = currentUserRole === UserRole.ADMIN || (currentUserRole as string) === "admin";
+
+        if (currentUserId && !isAdmin && currentUserId !== clientId && currentUserId !== freelancerId) {
+            return next(
+                appError({
+                    statusCode: StatusCodes.FORBIDDEN,
+                    message: "You are not authorized to view this contract",
+                    statusText: statusText.FAIL,
+                })
+            );
+        }
+
+        // Fetch associated milestones
+        const milestones = await Milestone.find({ contract: contract._id }).sort({ order: 1 }).lean();
+
+        const contractData = {
+            ...contract.toObject(),
+            milestones,
+        };
+
         res.status(StatusCodes.OK).json({
             status: statusText.SUCCESS,
             message: "Contract details fetched successfully",
             data: {
-                contract,
+                contract: contractData,
             },
         });
     }

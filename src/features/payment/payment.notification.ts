@@ -149,7 +149,7 @@ export const notifyFreelancerOnMilestoneFundsReleased = async (
 
         const amountReleased = Number(payment.freelancerAmount || milestone.amount).toLocaleString();
         const notificationTitle = "Milestone Approved & Funds Released";
-        const notificationMessage = `${clientName} has approved Milestone #${milestone.order}: "${milestone.title}". $${amountReleased} has been released to your Stripe Connect account.`;
+        const notificationMessage = `The client has approved Milestone #${milestone.order}: "${milestone.title}". $${amountReleased} has been released to your Stripe Connect account.`;
 
         const notification = await Notification.create({
             recipient: freelancerId,
@@ -157,9 +157,9 @@ export const notifyFreelancerOnMilestoneFundsReleased = async (
             type: NotificationType.MILESTONE_APPROVED,
             title: notificationTitle,
             message: notificationMessage,
-            entityType: NotificationEntityType.MILESTONE,
-            entityId: milestone._id,
-            link: `/dashboard/contracts/${contract._id}`,
+            entityType: NotificationEntityType.CONTRACT,
+            entityId: contract._id,
+            link: `/contracts/${contract._id}`,
         });
 
         getIO().to(`user:${freelancerId}`).emit(NotificationType.MILESTONE_APPROVED, notification);
