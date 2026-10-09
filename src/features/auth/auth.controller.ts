@@ -409,6 +409,8 @@ const login = asyncWrapper(async (req: Request, res: Response, next: NextFunctio
         maxAge: 1000 * 60 * 60,
     });
 
+    
+
     if (!token) {
         return next(
             appError({
@@ -430,10 +432,25 @@ const login = asyncWrapper(async (req: Request, res: Response, next: NextFunctio
 
 
 
-const logout = asyncWrapper(async (req: Request, res: Response, next: NextFunction) => {
-    res.clearCookie('token');
-    res.status(200).json({ message: 'logout successfully', data: null })
-})
+const logout = asyncWrapper(
+    async (req: Request, res: Response) => {
+        res.clearCookie("token", {
+            httpOnly: true,
+            secure: process.env.NODE_ENV === "production",
+            sameSite:
+                process.env.NODE_ENV === "production"
+                    ? "none"
+                    : "lax",
+            path: "/",
+        });
+
+        return res.status(200).json({
+            success: true,
+            message: "Logout successfully",
+        });
+    }
+);
+
 
 
 const forgetPassword = asyncWrapper(async (req: Request, res: Response, next: NextFunction) => {
