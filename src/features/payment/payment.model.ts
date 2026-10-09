@@ -1,3 +1,4 @@
+
 import { Schema, model, Types } from "mongoose";
 
 export enum PaymentStatus {
@@ -24,10 +25,8 @@ export enum PaymentMethod {
 const paymentSchema = new Schema(
     {
         /*
-        |--------------------------------------------------------------------------
-        | GigFlow Relations
-        |--------------------------------------------------------------------------
-        */
+         * GigFlow Relations
+         */
 
         contract: {
             type: Types.ObjectId,
@@ -40,7 +39,6 @@ const paymentSchema = new Schema(
             type: Types.ObjectId,
             ref: "Milestone",
             default: null,
-            index: true,
         },
 
         client: {
@@ -58,10 +56,8 @@ const paymentSchema = new Schema(
         },
 
         /*
-        |--------------------------------------------------------------------------
-        | Payment Information
-        |--------------------------------------------------------------------------
-        */
+         * Payment Information
+         */
 
         type: {
             type: String,
@@ -71,14 +67,12 @@ const paymentSchema = new Schema(
             index: true,
         },
 
-        // Gross amount charged to the client
         amount: {
             type: Number,
             required: true,
             min: 0,
         },
 
-        // GigFlow platform fee
         platformFee: {
             type: Number,
             required: true,
@@ -86,7 +80,6 @@ const paymentSchema = new Schema(
             default: 0,
         },
 
-        // Amount that belongs to the freelancer
         freelancerAmount: {
             type: Number,
             required: true,
@@ -104,10 +97,8 @@ const paymentSchema = new Schema(
         },
 
         /*
-        |--------------------------------------------------------------------------
-        | Payment Method
-        |--------------------------------------------------------------------------
-        */
+         * Payment Method
+         */
 
         method: {
             type: String,
@@ -117,10 +108,8 @@ const paymentSchema = new Schema(
         },
 
         /*
-        |--------------------------------------------------------------------------
-        | Payment Status
-        |--------------------------------------------------------------------------
-        */
+         * Payment Status
+         */
 
         status: {
             type: String,
@@ -131,37 +120,30 @@ const paymentSchema = new Schema(
         },
 
         /*
-        |--------------------------------------------------------------------------
-        | Stripe Identifiers (Nullable with partial unique indexes)
-        |--------------------------------------------------------------------------
-        */
+         * Stripe Identifiers
+         */
 
         stripePaymentIntentId: {
             type: String,
             default: null,
             trim: true,
-            index: true,
         },
 
         stripeChargeId: {
             type: String,
             default: null,
             trim: true,
-            index: true,
         },
 
         stripeTransferId: {
             type: String,
             default: null,
             trim: true,
-            index: true,
         },
 
         /*
-        |--------------------------------------------------------------------------
-        | Transaction
-        |--------------------------------------------------------------------------
-        */
+         * Transaction
+         */
 
         transactionId: {
             type: Types.ObjectId,
@@ -171,10 +153,8 @@ const paymentSchema = new Schema(
         },
 
         /*
-        |--------------------------------------------------------------------------
-        | Payment Dates
-        |--------------------------------------------------------------------------
-        */
+         * Payment Dates
+         */
 
         paidAt: {
             type: Date,
@@ -193,10 +173,8 @@ const paymentSchema = new Schema(
         },
 
         /*
-        |--------------------------------------------------------------------------
-        | Failure
-        |--------------------------------------------------------------------------
-        */
+         * Failure
+         */
 
         failureReason: {
             type: String,
@@ -206,10 +184,8 @@ const paymentSchema = new Schema(
         },
 
         /*
-        |--------------------------------------------------------------------------
-        | Refund
-        |--------------------------------------------------------------------------
-        */
+         * Refund
+         */
 
         refundedAt: {
             type: Date,
@@ -229,124 +205,73 @@ const paymentSchema = new Schema(
 );
 
 /*
-|--------------------------------------------------------------------------
-| Partial Unique Indexes (Prevents Null Collisions and Duplicates)
-|--------------------------------------------------------------------------
-*/
+ * Partial Unique Indexes
+ */
 
-// Guarantees maximum ONE Payment per Milestone
+// One Payment per milestone when milestone is an ObjectId.
 paymentSchema.index(
     { milestone: 1 },
     {
+        name: "milestone_1",
         unique: true,
         partialFilterExpression: {
-            milestone: {
-                $type: "objectId",
-            },
+            milestone: { $type: "objectId" },
         },
     }
 );
 
-// Allows multiple nulls, guarantees uniqueness when a String Stripe PaymentIntent ID exists
+// Unique Stripe PaymentIntent IDs when the field contains a string.
 paymentSchema.index(
     { stripePaymentIntentId: 1 },
     {
+        name: "stripePaymentIntentId_1",
         unique: true,
         partialFilterExpression: {
-            stripePaymentIntentId: {
-                $type: "string",
-            },
+            stripePaymentIntentId: { $type: "string" },
         },
     }
 );
 
-// Allows multiple nulls, guarantees uniqueness when a String Stripe Charge ID exists
+// Unique Stripe Charge IDs when the field contains a string.
 paymentSchema.index(
     { stripeChargeId: 1 },
     {
+        name: "stripeChargeId_1",
         unique: true,
         partialFilterExpression: {
-            stripeChargeId: {
-                $type: "string",
-            },
+            stripeChargeId: { $type: "string" },
         },
     }
 );
 
 /*
-|--------------------------------------------------------------------------
-| Query & Sorting Indexes
-|--------------------------------------------------------------------------
-*/
+ * Query and Sorting Indexes
+ */
 
-paymentSchema.index({
-    client: 1,
-    createdAt: -1,
-});
-
-paymentSchema.index({
-    freelancer: 1,
-    createdAt: -1,
-});
-
-paymentSchema.index({
-    contract: 1,
-    createdAt: -1,
-});
-
-paymentSchema.index({
-    status: 1,
-    createdAt: -1,
-});
-
-paymentSchema.index({
-    type: 1,
-    createdAt: -1,
-});
-
-paymentSchema.index({
-    method: 1,
-    createdAt: -1,
-});
+paymentSchema.index({ client: 1, createdAt: -1 });
+paymentSchema.index({ freelancer: 1, createdAt: -1 });
+paymentSchema.index({ contract: 1, createdAt: -1 });
+paymentSchema.index({ status: 1, createdAt: -1 });
+paymentSchema.index({ type: 1, createdAt: -1 });
+paymentSchema.index({ method: 1, createdAt: -1 });
 
 export const Payment = model("Payment", paymentSchema);
 
 /**
- * Safely synchronizes payment indexes by dropping legacy indexes on startup.
+ * Synchronizes indexes after MongoDB has connected.
+ *
+ * Note: syncIndexes() may drop indexes that exist in MongoDB
+ * but are not declared in this schema. Review database indexes
+ * before running this in production.
  */
 export const syncPaymentIndexes = async (): Promise<void> => {
     try {
-        const collection = Payment.collection;
-        if (!collection) return;
-
-        const existingIndexes = await collection.indexes().catch(() => []);
-
-        for (const idx of existingIndexes) {
-            // Drop legacy unique index on stripeChargeId if not partial
-            if (idx.name === "stripeChargeId_1" && idx.unique && !idx.partialFilterExpression) {
-                console.log("🧹 Dropping legacy unique index: stripeChargeId_1");
-                await collection.dropIndex("stripeChargeId_1").catch(() => {});
-            }
-            // Drop legacy unique index on stripePaymentIntentId if not partial
-            if (idx.name === "stripePaymentIntentId_1" && idx.unique && !idx.partialFilterExpression) {
-                console.log("🧹 Dropping legacy unique index: stripePaymentIntentId_1");
-                await collection.dropIndex("stripePaymentIntentId_1").catch(() => {});
-            }
-            // Drop legacy milestone_1 index if not partial unique
-            if (idx.name === "milestone_1" && (!idx.unique || !idx.partialFilterExpression)) {
-                console.log("🧹 Dropping legacy milestone_1 index to apply partial unique index");
-                await collection.dropIndex("milestone_1").catch(() => {});
-            }
-        }
-
         await Payment.syncIndexes();
-        console.log("✅ Payment indexes synchronized successfully.");
-    } catch (err) {
-        console.warn("⚠️ Error synchronizing payment indexes:", err);
+        console.log("Payment indexes synchronized successfully.");
+    } catch (error) {
+        console.error("Error synchronizing payment indexes:", error);
+        throw error;
     }
 };
-
-// Trigger safe index migration upon module load
-syncPaymentIndexes();
 
 export default Payment;
