@@ -1,53 +1,49 @@
----
+# GigFlow API 🚀
 
-### Part 2: GigFlow Backend Repository (`gigflow-api`)
-
-#### **GitHub Repository Details & Description**
-* **Repository Name suggestion**: `gigflow-api`
-* **Short Description** (for GitHub About section): 
-  > The robust Node.js, Express, and TypeScript backend for GigFlow. Features secure REST APIs, MongoDB/Mongoose models, real-time Socket.io WebSockets, and Stripe Connect payment workflows.
-
-#### **README.md File**
-```markdown
-# GigFlow API (Backend)
-
-The backend server and RESTful API powering **GigFlow**, a comprehensive freelance marketplace platform. Built with **Node.js**, **Express.js**, **TypeScript**, and **MongoDB**, this service manages complex marketplace workflows including user verification, escrow milestone processing, real-time web sockets, and payment pipelines.
+The backend RESTful API and real-time infrastructure powering **GigFlow**, an end-to-end freelance marketplace platform. Built with **Node.js**, **Express.js**, **TypeScript**, and **MongoDB**, this server manages user authentication, contract lifecycles, milestone payments, cloud file uploads, and real-time WebSocket communications.
 
 ---
 
-## 🚀 Core Capabilities
+## 🌟 Key Backend Capabilities
 
-* **Modular REST API**: Structured routing for users, jobs, proposals, contracts, milestones, conversations, messages, notifications, and transactions.
-* **Robust Data Modeling**: Mongoose schemas configured with strict validation rules, relationship references, and partial unique indexes to ensure payment and milestone data integrity.
-* **Real-Time Infrastructure**: Powered by **Socket.io** to manage authenticated bi-directional messaging, online status events, and instant notification broadcasting.
-* **Payment Processing**: Integrated **Stripe Connect V2** workflows to handle escrow deposits, automated platform commission fee calculations, and freelancer payouts.
-* **Media & File Handling**: Integrated with **Cloudinary** for secure cloud image storage and asset management.
-* **Security & Reliability**: Features JWT authorization, Google OAuth integration, role-based access control, centralized API error handling, and database connection safeguards.
+* **Authentication & Authorization**: Full JWT-based authentication alongside **Google OAuth** integration, featuring role-based access control (RBAC) for Clients, Freelancers, and Admins.
+* **Modular REST API Design**: Dedicated endpoints for users, jobs, proposals, contracts, milestones, conversations, messages, notifications, payments, and identity verification.
+* **Database & Data Integrity**: Mongoose schemas designed with partial unique indexing to support nullable Stripe identifiers while strictly enforcing single-payment constraints on contracts.
+* **Real-Time Communication**: **Socket.IO** infrastructure powering bi-directional messaging, online status tracking, and instant user notifications.
+* **SafePay Escrow & Payments**: **Stripe Connect** workflow integration to hold client funds, calculate platform commission fees, and disburse milestone payouts.
+* **Media & Cloud Storage**: **Cloudinary** integration paired with **Multer** for handling user profile pictures, verification documents, and project deliverables.
+* **Reliability & Safeguards**: Centralized API error handling middleware and Mongoose connection guards to prevent operation buffering timeouts on cold starts.
 
 ---
 
 ## 🛠️ Tech Stack
 
-* **Runtime Environment**: Node.js
+* **Runtime**: Node.js
 * **Framework**: Express.js
 * **Language**: TypeScript
 * **Database & ORM**: MongoDB, Mongoose
-* **Real-Time Communication**: Socket.io
-* **Payment Gateway**: Stripe Connect V2
-* **Cloud Storage**: Cloudinary, Multer
+* **Real-Time Engine**: Socket.IO
+* **Authentication**: JWT, Google OAuth (Passport.js / Google Auth Library)
+* **Payments**: Stripe Connect
+* **Storage & Uploads**: Cloudinary, Multer
+* **Deployment**: Render / Railway (Persistent Server)
 
 ---
 
-## ⚙️ Getting Started
+## 📁 Repository Structure
 
-### Prerequisites
-* Node.js (v18+)
-* MongoDB instance (Local or MongoDB Atlas)
-* Stripe & Cloudinary developer account credentials
-
-### Installation & Running Locally
-
-1. **Clone the repository**:
-   ```bash
-   git clone [https://github.com/your-username/gigflow-api.git](https://github.com/your-username/gigflow-api.git)
-   cd gigflow-api
+```text
+gigflow-api/
+├── src/
+│   ├── config/          # Database, Cloudinary, & Stripe configurations
+│   ├── controllers/     # Route logic for jobs, proposals, contracts, etc.
+│   ├── middlewares/     # JWT Auth, error handling, file uploaders
+│   ├── models/          # Mongoose schemas & index definitions
+│   ├── routes/          # Express route declarations
+│   ├── services/        # Third-party integrations (Stripe, Cloudinary)
+│   ├── sockets/         # Socket.IO connection & event handlers
+│   ├── utils/           # Helper functions & API response formatters
+│   └── index.ts         # Application entry point & server initializers
+├── .env.example
+├── package.json
+└── tsconfig.json
