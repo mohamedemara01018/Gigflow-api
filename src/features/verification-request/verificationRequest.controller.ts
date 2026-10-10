@@ -361,7 +361,7 @@ export const reviewVerificationRequest = asyncWrapper(
                 : "Identity Verification Rejected";
 
             const notificationMessage = isApproved
-                ? "Your identity verification request has been approved. You now have full access to verified features."
+                ? "Your identity verification request has been approved. Please log out and log back in to update your session."
                 : `Your identity verification request was rejected. Reason: ${rejectionReason}`;
 
             const notification = await Notification.create({
@@ -372,10 +372,10 @@ export const reviewVerificationRequest = asyncWrapper(
                 message: notificationMessage,
                 entityType: NotificationEntityType.VERIFICATION,
                 entityId: updatedRequest._id,
-                link: "/settings/identity-verification",
+                link: "/verify-identity",
             });
 
-            getIO().to(`user:${currentUser?._id}`).emit(notificationType, notification)
+            getIO().to(`user:${currentUser?._id}`).emit(notificationType, notification);
         }
 
         res.status(StatusCodes.OK).json({
