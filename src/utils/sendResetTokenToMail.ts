@@ -12,7 +12,7 @@ export const sendResetTokenToMail = async ({
     firstName,
 }: SendResetTokenToMailProps) => {
     const appName = process.env.APP_NAME || "GigFlow";
-    const frontendUrl = process.env.FRONTEND_URL || "http://localhost:3000";
+    const frontendUrl = process.env.CLIENT_URL || "http://localhost:3000";
     const resetUrl = `${frontendUrl}/reset-password?token=${resetToken}`;
     const userFirstName = firstName?.trim() || "there";
 
