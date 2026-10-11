@@ -82,29 +82,27 @@ export const createVerificationRequest = asyncWrapper(
 
         await newRequest.populate("user", "firstName lastName email avatar");
 
-        // Asynchronously notify all admins via email without blocking the response
-        (async () => {
-            try {
-                const admins = await User.find({ role: UserRole.ADMIN }).select("email firstName lastName");
-                const adminEmails = admins.map((admin) => admin.email).filter((email): email is string => Boolean(email));
+        // Notify all admins via email
+        try {
+            const admins = await User.find({ role: UserRole.ADMIN }).select("email firstName lastName");
+            const adminEmails = admins.map((admin) => admin.email).filter((email): email is string => Boolean(email));
 
-                if (adminEmails.length > 0) {
-                    await sendNewVerificationRequestAdminAlert({
-                        adminEmails,
-                        user: {
-                            firstName: (newRequest.user as any)?.firstName,
-                            lastName: (newRequest.user as any)?.lastName,
-                            email: (newRequest.user as any)?.email,
-                        },
-                        documentType: newRequest.documentType,
-                        submittedAt: newRequest.submittedAt,
-                        requestId: String(newRequest._id),
-                    });
-                }
-            } catch (mailError) {
-                console.error("[Mail Error] Failed to send admin verification alert:", mailError);
+            if (adminEmails.length > 0) {
+                await sendNewVerificationRequestAdminAlert({
+                    adminEmails,
+                    user: {
+                        firstName: (newRequest.user as any)?.firstName,
+                        lastName: (newRequest.user as any)?.lastName,
+                        email: (newRequest.user as any)?.email,
+                    },
+                    documentType: newRequest.documentType,
+                    submittedAt: newRequest.submittedAt,
+                    requestId: String(newRequest._id),
+                });
             }
-        })();
+        } catch (mailError) {
+            console.error("[Mail Error] Failed to send admin verification alert:", mailError);
+        }
 
         res.status(StatusCodes.CREATED).json({
             status: statusText.SUCCESS,
@@ -355,32 +353,14 @@ export const reviewVerificationRequest = asyncWrapper(
             );
         }
 
-        // Send token cookie if user identity was successfully verified
-        if (updatedUser?.isIdentityVerified) {
-            const token = jwt.sign(
-                {
-                    _id: updatedUser._id,
-                    email: updatedUser.email,
-                    role: updatedUser.role,
-                    isEmailVerified: updatedUser.isEmailVerified,
-                    isIdentityVerified: updatedUser.isIdentityVerified,
-                },
-                String(process.env.JWT_TOKEN_SECRET_KEY)
-            );
-
-            res.cookie("token", token, {
-                httpOnly: true,
-                secure: process.env.NODE_ENV === "production",
-                maxAge: 1000 * 60 * 60, // 1 hour
-            });
-        }
-
         // ==========================================
-        // NOTIFICATION DISPATCH
+        // NOTIFICATIONS & EMAIL DISPATCH
         // ==========================================
-        if (status === VerificationStatus.APPROVED || status === VerificationStatus.REJECTED) {
-            const isApproved = status === VerificationStatus.APPROVED;
+        const normalizedStatus = String(status).toLowerCase().trim();
+        const isApproved = normalizedStatus === VerificationStatus.APPROVED;
+        const isRejected = normalizedStatus === VerificationStatus.REJECTED;
 
+        if (isApproved || isRejected) {
             const notificationType = isApproved
                 ? NotificationType.VERIFICATION_APPROVED
                 : NotificationType.VERIFICATION_REJECTED;
@@ -393,44 +373,57 @@ export const reviewVerificationRequest = asyncWrapper(
                 ? "Your identity verification request has been approved. Please log out and log back in to update your session."
                 : `Your identity verification request was rejected. Reason: ${rejectionReason}`;
 
-            const notification = await Notification.create({
-                recipient: verification.user,
-                sender: reviewedBy,
-                type: notificationType,
-                title: notificationTitle,
-                message: notificationMessage,
-                entityType: NotificationEntityType.VERIFICATION,
-                entityId: updatedRequest._id,
-                link: "/verify-identity",
-            });
+            // 1. Safe in-app notification & Socket.IO
+            try {
+                const notification = await Notification.create({
+                    recipient: verification.user,
+                    sender: Types.ObjectId.isValid(reviewedBy) ? reviewedBy : null,
+                    type: notificationType,
+                    title: notificationTitle,
+                    message: notificationMessage,
+                    entityType: NotificationEntityType.VERIFICATION,
+                    entityId: updatedRequest._id,
+                    link: "/verify-identity",
+                });
 
-            getIO().to(`user:${currentUser?._id}`).emit(notificationType, notification);
-
-            // Asynchronously dispatch decision email to user without blocking response
-            (async () => {
                 try {
-                    const recipientEmail = currentUser?.email || (updatedRequest.user as any)?.email;
-                    const recipientFirstName = currentUser?.firstName || (updatedRequest.user as any)?.firstName;
-
-                    if (recipientEmail) {
-                        if (isApproved) {
-                            await sendVerificationApprovedEmail({
-                                email: recipientEmail,
-                                firstName: recipientFirstName,
-                            });
-                        } else {
-                            await sendVerificationRejectedEmail({
-                                email: recipientEmail,
-                                firstName: recipientFirstName,
-                                rejectionReason: rejectionReason || "The submitted documentation did not meet our verification criteria.",
-                                notes: notes || undefined,
-                            });
-                        }
-                    }
-                } catch (mailError) {
-                    console.error("[Mail Error] Failed to send user verification decision email:", mailError);
+                    getIO().to(`user:${currentUser?._id || verification.user}`).emit(notificationType, notification);
+                } catch (ioErr) {
+                    console.warn("[Socket.IO] Socket emit skipped (runtime uninitialized or user offline):", ioErr);
                 }
-            })();
+            } catch (notifErr) {
+                console.warn("[Notification Warning] Could not create in-app notification:", notifErr);
+            }
+
+            // 2. Email notification to applicant user
+            try {
+                const userDoc: any = currentUser || (typeof updatedRequest.user === "object" ? updatedRequest.user : await User.findById(verification.user));
+                const recipientEmail: string | undefined = userDoc?.email || (updatedRequest.user as any)?.email;
+                const recipientFirstName: string = userDoc?.firstName || (updatedRequest.user as any)?.firstName || "there";
+
+                console.log(`[Verification Review] Sending decision email to: "${recipientEmail}" (Decision: ${normalizedStatus})`);
+
+                if (recipientEmail) {
+                    if (isApproved) {
+                        await sendVerificationApprovedEmail({
+                            email: recipientEmail,
+                            firstName: recipientFirstName,
+                        });
+                    } else {
+                        await sendVerificationRejectedEmail({
+                            email: recipientEmail,
+                            firstName: recipientFirstName,
+                            rejectionReason: rejectionReason || "The submitted documentation did not meet our verification criteria.",
+                            notes: notes || undefined,
+                        });
+                    }
+                    console.log(`[Verification Review] Successfully dispatched decision email to ${recipientEmail}`);
+                } else {
+                    console.warn("[Verification Review Warning] No valid recipient email found for user ID:", verification.user);
+                }
+            } catch (mailError) {
+                console.error("[Mail Error] Failed to send user verification decision email:", mailError);
+            }
         }
 
         res.status(StatusCodes.OK).json({

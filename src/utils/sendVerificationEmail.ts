@@ -318,15 +318,20 @@ export const sendVerificationApprovedEmail = async ({
         `Your account is now fully verified with complete access to platform features.\n\n` +
         `Access your dashboard here: ${frontendUrl}/`;
 
-    await transporter.sendMail({
-        from: `"${appName}" <${process.env.EMAIL_USER}>`,
-        to: email,
-        subject: `🎉 Congratulations! Your Identity Verification is Approved - ${appName}`,
-        text: plainText,
-        html: htmlContent,
-    });
-
-    console.log(`[Mail Service] Verification approval email successfully sent to ${email}`);
+    try {
+        console.log(`[Mail Service] Sending verification approval email to ${email}...`);
+        await transporter.sendMail({
+            from: `"${appName}" <${process.env.EMAIL_USER}>`,
+            to: email,
+            subject: `🎉 Congratulations! Your Identity Verification is Approved - ${appName}`,
+            text: plainText,
+            html: htmlContent,
+        });
+        console.log(`[Mail Service] Verification approval email successfully sent to ${email}`);
+    } catch (err: any) {
+        console.error(`[Mail Service Error] Failed to send verification approval email to ${email}:`, err);
+        throw err;
+    }
 };
 
 // ==========================================
@@ -460,13 +465,18 @@ export const sendVerificationRejectedEmail = async ({
         `${notes ? `Additional Notes: ${notes}\n` : ""}\n` +
         `You can review the feedback and resubmit your verification here: ${resubmitUrl}`;
 
-    await transporter.sendMail({
-        from: `"${appName}" <${process.env.EMAIL_USER}>`,
-        to: email,
-        subject: `Update regarding your Identity Verification Request - ${appName}`,
-        text: plainText,
-        html: htmlContent,
-    });
-
-    console.log(`[Mail Service] Verification rejection email successfully sent to ${email}`);
+    try {
+        console.log(`[Mail Service] Sending verification rejection email to ${email}...`);
+        await transporter.sendMail({
+            from: `"${appName}" <${process.env.EMAIL_USER}>`,
+            to: email,
+            subject: `Update regarding your Identity Verification Request - ${appName}`,
+            text: plainText,
+            html: htmlContent,
+        });
+        console.log(`[Mail Service] Verification rejection email successfully sent to ${email}`);
+    } catch (err: any) {
+        console.error(`[Mail Service Error] Failed to send verification rejection email to ${email}:`, err);
+        throw err;
+    }
 };
