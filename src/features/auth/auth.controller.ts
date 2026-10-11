@@ -85,7 +85,6 @@ const registerNewUser = asyncWrapper(async (req: Request, res: Response, next: N
     }
 
     if (!Object.values(UserRole).includes(role)) {
-        console.log('kdfj')
         return next(
             appError({
                 statusCode: 400,

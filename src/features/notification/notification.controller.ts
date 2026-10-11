@@ -12,7 +12,6 @@ import { Notification } from "./notification.model.js";
 export const getMyNotifications = asyncWrapper(
     async (req: Request, res: Response, next: NextFunction) => {
         const userId = req.currentUser?._id
-        console.log('userId', req.currentUser)
         if (!userId) {
             return next(
                 appError({
