@@ -1,4 +1,4 @@
-import { transporter } from "../config/mail.config.js";
+import { transporter, getFromAddress } from "../config/mail.config.js";
 
 interface SendResetTokenToMailProps {
     email: string;
@@ -105,7 +105,7 @@ export const sendResetTokenToMail = async ({
 
     try {
         await transporter.sendMail({
-            from: `"${appName}" <${process.env.EMAIL_USER}>`,
+            from: getFromAddress(appName),
             to: email,
             subject: `Reset your password - ${appName}`,
             text: `Hello ${userFirstName},\n\nWe received a request to reset your password. Use the link below to reset it:\n\n${resetUrl}\n\nThis link will expire in 10 minutes. If you did not request this, please ignore this email.`,
@@ -114,7 +114,12 @@ export const sendResetTokenToMail = async ({
 
         console.log(`[Mail Service] Password reset email successfully sent to ${email}`);
     } catch (err: any) {
-        console.error(`[Mail Service Error] Failed to send password reset email to ${email}:`, err);
+        console.error(`[Mail Service Error] Failed to send password reset email to ${email}:`, {
+            message: err?.message,
+            code: err?.code,
+            command: err?.command,
+            response: err?.response,
+        });
         throw new Error(err?.message || "Failed to send password reset email");
     }
 };

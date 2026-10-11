@@ -1,4 +1,4 @@
-import { transporter } from "../config/mail.config.js";
+import { transporter, getFromAddress } from "../config/mail.config.js";
 
 // ==========================================
 // Types & Interfaces
@@ -191,11 +191,23 @@ export const sendNewVerificationRequestAdminAlert = async ({
         `${requestId ? `Request ID: ${requestId}\n` : ""}\n` +
         `Please review this request on the admin panel: ${adminReviewUrl}`;
 
-    // Dispatch to all admins safely
-    await Promise.allSettled(
-        adminEmails.map(async (email) => {
+    // Deduplicate and sanitize admin email addresses
+    const uniqueAdminEmails = Array.from(
+        new Set(adminEmails.map((e) => e?.trim().toLowerCase()).filter(Boolean))
+    );
+
+    if (uniqueAdminEmails.length === 0) {
+        console.warn("[Mail Service] No valid admin email addresses to notify.");
+        return;
+    }
+
+    const fromAddress = getFromAddress(appName);
+
+    // Dispatch to all admins safely using Promise.allSettled
+    const results = await Promise.allSettled(
+        uniqueAdminEmails.map(async (email) => {
             return transporter.sendMail({
-                from: `"${appName}" <${process.env.EMAIL_USER}>`,
+                from: fromAddress,
                 to: email,
                 subject: `[${appName}] New Identity Verification Request - ${userFullName}`,
                 text: plainText,
@@ -204,7 +216,21 @@ export const sendNewVerificationRequestAdminAlert = async ({
         })
     );
 
-    console.log(`[Mail Service] Verification alert sent to ${adminEmails.length} admin(s).`);
+    const successful = results.filter((r) => r.status === "fulfilled").length;
+    const failed = results.filter((r) => r.status === "rejected");
+
+    console.log(`[Mail Service] Verification alert sent to ${successful}/${uniqueAdminEmails.length} admin(s).`);
+
+    if (failed.length > 0) {
+        failed.forEach((f, idx) => {
+            if (f.status === "rejected") {
+                console.error(`[Mail Service Error] Admin alert delivery failed for recipient #${idx + 1}:`, {
+                    reason: f.reason?.message,
+                    code: f.reason?.code,
+                });
+            }
+        });
+    }
 };
 
 // ==========================================
@@ -321,7 +347,7 @@ export const sendVerificationApprovedEmail = async ({
     try {
         console.log(`[Mail Service] Sending verification approval email to ${email}...`);
         await transporter.sendMail({
-            from: `"${appName}" <${process.env.EMAIL_USER}>`,
+            from: getFromAddress(appName),
             to: email,
             subject: `🎉 Congratulations! Your Identity Verification is Approved - ${appName}`,
             text: plainText,
@@ -329,7 +355,12 @@ export const sendVerificationApprovedEmail = async ({
         });
         console.log(`[Mail Service] Verification approval email successfully sent to ${email}`);
     } catch (err: any) {
-        console.error(`[Mail Service Error] Failed to send verification approval email to ${email}:`, err);
+        console.error(`[Mail Service Error] Failed to send verification approval email to ${email}:`, {
+            message: err?.message,
+            code: err?.code,
+            command: err?.command,
+            response: err?.response,
+        });
         throw err;
     }
 };
@@ -468,7 +499,7 @@ export const sendVerificationRejectedEmail = async ({
     try {
         console.log(`[Mail Service] Sending verification rejection email to ${email}...`);
         await transporter.sendMail({
-            from: `"${appName}" <${process.env.EMAIL_USER}>`,
+            from: getFromAddress(appName),
             to: email,
             subject: `Update regarding your Identity Verification Request - ${appName}`,
             text: plainText,
@@ -476,7 +507,12 @@ export const sendVerificationRejectedEmail = async ({
         });
         console.log(`[Mail Service] Verification rejection email successfully sent to ${email}`);
     } catch (err: any) {
-        console.error(`[Mail Service Error] Failed to send verification rejection email to ${email}:`, err);
+        console.error(`[Mail Service Error] Failed to send verification rejection email to ${email}:`, {
+            message: err?.message,
+            code: err?.code,
+            command: err?.command,
+            response: err?.response,
+        });
         throw err;
     }
 };

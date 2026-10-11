@@ -1,4 +1,4 @@
-import { transporter } from "../config/mail.config.js";
+import { transporter, getFromAddress } from "../config/mail.config.js";
 
 interface SendCodeToMailProps {
     email: string;
@@ -92,7 +92,7 @@ export const sendCodeToMail = async ({ email, code, firstName }: SendCodeToMailP
 
     try {
         await transporter.sendMail({
-            from: `"${appName}" <${process.env.EMAIL_USER}>`,
+            from: getFromAddress(appName),
             to: email,
             subject: `${code} is your ${appName} verification code`,
             text: `Hello ${userFirstName}, your ${appName} verification code is: ${code}. It expires in 5 minutes.`,
@@ -101,7 +101,12 @@ export const sendCodeToMail = async ({ email, code, firstName }: SendCodeToMailP
 
         console.log(`[Mail Service] Verification code successfully sent to ${email}`);
     } catch (err: any) {
-        console.error(`[Mail Service Error] Failed to send email to ${email}:`, err);
+        console.error(`[Mail Service Error] Failed to send verification code to ${email}:`, {
+            message: err?.message,
+            code: err?.code,
+            command: err?.command,
+            response: err?.response,
+        });
         throw new Error(err?.message || "Failed to send verification email");
     }
 };

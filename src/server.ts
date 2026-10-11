@@ -6,6 +6,7 @@ import http from "http";
 import app from "./app.js";
 import { connectDB } from "./config/database.config.js";
 import { initializeSocket } from "./socket.js";
+import { verifyMailConnection } from "./config/mail.config.js";
 
 const PORT = Number(process.env.PORT) || 5000;
 
@@ -16,6 +17,11 @@ const startServer = async (): Promise<void> => {
         const server = http.createServer(app);
 
         initializeSocket(server);
+
+        // Verify SMTP connection on startup
+        verifyMailConnection().catch((err) => {
+            console.error("Mail verification error on startup:", err);
+        });
 
         server.listen(PORT, () => {
             console.log("");
