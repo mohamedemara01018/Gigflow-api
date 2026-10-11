@@ -2,7 +2,7 @@ import { Request, Response, NextFunction } from "express";
 import { StatusCodes } from "http-status-codes";
 import { appError } from "../../utils/appError.utils.js";
 import asyncWrapper from "../../utils/asyncWrapper.utils.js";
-import { AttachmentEntityType, DocumentType, NotificationEntityType, NotificationType, statusText, VerificationStatus } from "../../utils/enums.utils.js";
+import { AttachmentEntityType, DocumentType, NotificationEntityType, NotificationType, statusText, UserRole, VerificationStatus } from "../../utils/enums.utils.js";
 import { VerificationRequest } from "./verificationRequest.model.js";
 import { Attachment } from "../attachment/attachment.model.js";
 import { destroyImageFromCloudinary } from "../../utils/cloudinary.utils.js";
@@ -12,6 +12,11 @@ import jwt from 'jsonwebtoken'
 import { Types } from "mongoose";
 import { Notification } from "../notification/notification.model.js";
 import { getIO } from "../../socket.js";
+import {
+    sendNewVerificationRequestAdminAlert,
+    sendVerificationApprovedEmail,
+    sendVerificationRejectedEmail,
+} from "../../utils/sendVerificationEmail.js";
 
 // ==========================================
 // 1. CREATE VERIFICATION REQUEST (User)
@@ -76,6 +81,30 @@ export const createVerificationRequest = asyncWrapper(
         });
 
         await newRequest.populate("user", "firstName lastName email avatar");
+
+        // Asynchronously notify all admins via email without blocking the response
+        (async () => {
+            try {
+                const admins = await User.find({ role: UserRole.ADMIN }).select("email firstName lastName");
+                const adminEmails = admins.map((admin) => admin.email).filter((email): email is string => Boolean(email));
+
+                if (adminEmails.length > 0) {
+                    await sendNewVerificationRequestAdminAlert({
+                        adminEmails,
+                        user: {
+                            firstName: (newRequest.user as any)?.firstName,
+                            lastName: (newRequest.user as any)?.lastName,
+                            email: (newRequest.user as any)?.email,
+                        },
+                        documentType: newRequest.documentType,
+                        submittedAt: newRequest.submittedAt,
+                        requestId: String(newRequest._id),
+                    });
+                }
+            } catch (mailError) {
+                console.error("[Mail Error] Failed to send admin verification alert:", mailError);
+            }
+        })();
 
         res.status(StatusCodes.CREATED).json({
             status: statusText.SUCCESS,
@@ -376,6 +405,32 @@ export const reviewVerificationRequest = asyncWrapper(
             });
 
             getIO().to(`user:${currentUser?._id}`).emit(notificationType, notification);
+
+            // Asynchronously dispatch decision email to user without blocking response
+            (async () => {
+                try {
+                    const recipientEmail = currentUser?.email || (updatedRequest.user as any)?.email;
+                    const recipientFirstName = currentUser?.firstName || (updatedRequest.user as any)?.firstName;
+
+                    if (recipientEmail) {
+                        if (isApproved) {
+                            await sendVerificationApprovedEmail({
+                                email: recipientEmail,
+                                firstName: recipientFirstName,
+                            });
+                        } else {
+                            await sendVerificationRejectedEmail({
+                                email: recipientEmail,
+                                firstName: recipientFirstName,
+                                rejectionReason: rejectionReason || "The submitted documentation did not meet our verification criteria.",
+                                notes: notes || undefined,
+                            });
+                        }
+                    }
+                } catch (mailError) {
+                    console.error("[Mail Error] Failed to send user verification decision email:", mailError);
+                }
+            })();
         }
 
         res.status(StatusCodes.OK).json({
