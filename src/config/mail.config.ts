@@ -1,77 +1,171 @@
+
 import nodemailer from "nodemailer";
 import dotenv from "dotenv";
 
 dotenv.config();
 
-const smtpHost = process.env.SMTP_HOST?.trim();
-const smtpPort = process.env.SMTP_PORT ? parseInt(process.env.SMTP_PORT.trim(), 10) : 587;
-const smtpUser = process.env.SMTP_USER?.trim() || process.env.EMAIL_USER?.trim();
-const smtpPass = process.env.SMTP_PASS?.trim() || process.env.EMAIL_PASS?.trim();
+// ============================================
+// SMTP Configuration
+// ============================================
 
-// Port security: port 465 uses SSL/TLS (secure: true); ports 587 and 2525 use STARTTLS (secure: false)
+const smtpHost = process.env.SMTP_HOST?.trim() || "smtp.gmail.com";
+
+const smtpPort = Number(
+    process.env.SMTP_PORT?.trim() || 587
+);
+
+const smtpUser =
+    process.env.SMTP_USER?.trim() ||
+    process.env.EMAIL_USER?.trim();
+
+const smtpPass = (
+    process.env.SMTP_PASS ||
+    process.env.EMAIL_PASS ||
+    ""
+)
+    .trim()
+    .replace(/\s+/g, "");
+
 const isSecure = smtpPort === 465;
 
-// Base transporter configuration with pooling and cloud TLS safeguards
-const transporterOptions: nodemailer.TransportOptions | any = {
+// Validate configuration at startup.
+if (!smtpUser || !smtpPass) {
+    throw new Error(
+        "[Mail Service] SMTP credentials are missing. " +
+        "Configure SMTP_USER/EMAIL_USER and SMTP_PASS/EMAIL_PASS."
+    );
+}
+
+if (![465, 587].includes(smtpPort)) {
+    throw new Error(
+        "[Mail Service] Invalid SMTP_PORT. Use 465 or 587."
+    );
+}
+
+// ============================================
+// Nodemailer Transporter
+// ============================================
+
+export const transporter = nodemailer.createTransport({
+    host: smtpHost,
+    port: smtpPort,
+    secure: isSecure,
+
+    // Require STARTTLS when using port 587.
+    requireTLS: smtpPort === 587,
+
+    // Connection pooling.
     pool: true,
-    maxConnections: 5,
+    maxConnections: 3,
     maxMessages: 100,
-    tls: {
-        rejectUnauthorized: false, // Prevents self-signed/proxy SSL handshake drops on cloud hosts
-    },
+
+    // Keep TLS certificate validation enabled.
+    // Do not set rejectUnauthorized: false.
+
     auth: {
         user: smtpUser,
         pass: smtpPass,
     },
-};
 
-if (smtpHost) {
-    transporterOptions.host = smtpHost;
-    transporterOptions.port = smtpPort;
-    transporterOptions.secure = isSecure;
-} else {
-    // Fallback: Default to Gmail service if no custom SMTP host is set
-    transporterOptions.service = "gmail";
-}
+    // Enable only temporarily when debugging.
+    logger: process.env.SMTP_DEBUG === "true",
+    debug: process.env.SMTP_DEBUG === "true",
+});
 
-export const transporter = nodemailer.createTransport(transporterOptions);
+// ============================================
+// Sender Address
+// ============================================
 
 /**
- * Standardizes the "From" header across all outgoing emails.
- * Mismatched or malformed From addresses trigger DMARC/SPF/DKIM spoofing
- * blocks on external providers (Google, Yahoo, Outlook, custom corporate mail).
+ * Returns a standardized sender address.
+ *
+ * EMAIL_FROM should normally match the authenticated Gmail
+ * address or another sender identity authorized by the provider.
  */
-export const getFromAddress = (customName?: string): string => {
-    const appName = customName || process.env.APP_NAME || "GigFlow";
+export const getFromAddress = (
+    customName?: string
+): string => {
+    const appName =
+        customName ||
+        process.env.APP_NAME ||
+        "GigFlow";
 
-    if (process.env.EMAIL_FROM && process.env.EMAIL_FROM.trim() !== "") {
-        const fromEnv = process.env.EMAIL_FROM.trim();
-        if (fromEnv.includes("<") && fromEnv.includes(">")) {
-            return fromEnv;
+    const configuredFrom = process.env.EMAIL_FROM?.trim();
+
+    const fromAddress = configuredFrom || smtpUser;
+
+    // Support: GigFlow <sender@example.com>
+    if (
+        fromAddress.includes("<") &&
+        fromAddress.includes(">")
+    ) {
+        return fromAddress;
+    }
+
+    // Escape quotes and backslashes in the display name.
+    const safeAppName = appName
+        .replace(/\\/g, "\\\\")
+        .replace(/"/g, '\\"');
+
+    return `"${safeAppName}" <${fromAddress}>`;
+};
+
+// ============================================
+// SMTP Connection Verification
+// ============================================
+
+/**
+ * Verifies SMTP connectivity and authentication.
+ *
+ * Important: verify() does not send an email and does not
+ * guarantee delivery to any recipient's inbox.
+ */
+export const verifyMailConnection =
+    async (): Promise<boolean> => {
+        try {
+            await transporter.verify();
+
+            console.info(
+                "[Mail Service] SMTP connection verified.",
+                {
+                    host: smtpHost,
+                    port: smtpPort,
+                    secure: isSecure,
+                    user: smtpUser,
+                }
+            );
+
+            return true;
+        } catch (error: unknown) {
+            const err = error as Error & {
+                code?: string;
+                command?: string;
+                responseCode?: number;
+                response?: string;
+            };
+
+            console.error(
+                "[Mail Service] SMTP verification failed:",
+                {
+                    message: err.message,
+                    code: err.code,
+                    command: err.command,
+                    responseCode: err.responseCode,
+                    response: err.response,
+                }
+            );
+
+            return false;
         }
-        return `"${appName}" <${fromEnv}>`;
-    }
+    };
 
-    const fallbackEmail = smtpUser || "noreply@gigflow.com";
-    return `"${appName}" <${fallbackEmail}>`;
-};
+// ============================================
+// Graceful Shutdown
+// ============================================
 
 /**
- * Startup diagnostic health check verifying SMTP connectivity and authentication.
+ * Close pooled SMTP connections when the application shuts down.
  */
-export const verifyMailConnection = async (): Promise<boolean> => {
-    try {
-        await transporter.verify();
-        const transportInfo = smtpHost ? `${smtpHost}:${smtpPort} (secure: ${isSecure})` : "Gmail Service";
-        console.log(`📧 [Mail Service] SMTP connection established & verified successfully -> ${transportInfo}`);
-        return true;
-    } catch (error: any) {
-        console.error("❌ [Mail Service Error] SMTP connection verification failed:", {
-            message: error?.message,
-            code: error?.code,
-            command: error?.command,
-            response: error?.response,
-        });
-        return false;
-    }
+export const closeMailTransporter = (): void => {
+    transporter.close();
 };
