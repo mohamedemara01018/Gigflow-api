@@ -408,7 +408,7 @@ const login = asyncWrapper(async (req: Request, res: Response, next: NextFunctio
         maxAge: 1000 * 60 * 60,
     });
 
-    
+
 
     if (!token) {
         return next(
@@ -479,15 +479,14 @@ const forgetPassword = asyncWrapper(async (req: Request, res: Response, next: Ne
         );
     }
 
-    // If a valid reset token already exists
+    // If a valid reset token already exists (Fixed date comparison using .getTime())
     if (
         user.resetToken &&
         user.resetTokenExpiresAt &&
-        String(user.resetTokenExpiresAt) > String(Date.now())
+        user.resetTokenExpiresAt.getTime() > Date.now()
     ) {
         return res.status(200).json({
-            message:
-                "A password reset link has already been sent to your email. Please check your inbox.",
+            message: "A password reset link has already been sent to your email. Please check your inbox.",
         });
     }
 
@@ -517,11 +516,9 @@ const forgetPassword = asyncWrapper(async (req: Request, res: Response, next: Ne
     });
 
     return res.status(200).json({
-        message:
-            "A password reset link has been sent to your email address.",
+        message: "A password reset link has been sent to your email address.",
     });
-}
-);
+});
 
 const resetPassword = asyncWrapper(async (req: Request, res: Response, next: NextFunction) => {
     const { token, password } = req.body;
